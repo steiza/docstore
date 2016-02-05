@@ -1,0 +1,35 @@
+{% extends 'base.html' %}
+
+{% block title %}
+A2 Government Document Repository
+{% end %}
+
+{% block body %}
+    <h3>Search</h3>
+    <div class='spacer'>
+        <form action='/search' method='GET'>
+        <input type='text' name='query'>
+        <input type='submit' value='Search'>
+    </div>
+    <h3>Last 10 Uploads</h3>
+    <div class='spacer'>
+        <table class='results'>
+            <thead>
+                <tr>
+                    <th>Title</th>
+                    <th>Uploaded On</th>
+                    <th>Source Organization</th>
+                </tr>
+            </thead>
+            {% for each_doc in recent_docs %}
+                <tr>
+                    <td><a href='/view/{{ url_escape(str(each_doc.id)) }}'>{{ escape(each_doc.doc_title) }}</a></td>
+                    <td>{{ escape(each_doc.date_uploaded.strftime('%Y-%m-%d')) }}</td>
+                    <td>{{ escape(each_doc.source_org) }}</td>
+                </tr>
+            {% end %}
+        </table>
+        <br /><br />
+        <a href='/search'>See all documents</a>
+    </div>
+{% end %}

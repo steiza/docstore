@@ -1,0 +1,69 @@
+{% extends 'base.html' %}
+
+{% block title %}
+Add Document
+{% end %}
+
+{% block body %}
+    <h3>Add Document</h3>
+    <div class='spacer'>
+        <form enctype='multipart/form-data' action='' method='POST'>
+            <table class='add_doc'>
+                <tr>
+                    <td colspan='2'><b>Document Information</b></td>
+                </tr>
+                <tr>
+                    <td>File</td>
+                    <td><input type='file' name='file' required></td>
+                </tr>
+                <tr>
+                    <td>Title</td>
+                    <td><input type='text' name='doc_title' style='width:20em;' placeholder='Q4 Important Meeting Minutes' required></td>
+                </tr>
+                <tr>
+                    <td>Description</td>
+                    <td><textarea name='doc_description' rows='4' cols='50' placeholder="Important minutes from an important meeting - you won't believe agenda item #3!" required></textarea></td>
+                </tr>
+                <tr>
+                    <td>Source Organization</td>
+                    <td><input type='text' name='source_org' placeholder='Important Commission' required></td>
+                </tr>
+                <tr>
+                    <td>Request Tracking Number*</td>
+                    <td><input type='text' name='tracking_number' placeholder='00011235813'></td>
+                </tr>
+                <tr>
+                    <td>Date Requested*</td>
+                    <td><input type='text' class='datepicker' name='date_requested'></td>
+                </tr>
+                <tr>
+                    <td>Date Received*</td>
+                    <td><input type='text' class='datepicker' name='date_received'></td>
+                </tr>
+                <tr><td colspan='2'>* optional</td></tr>
+                <tr><td colspan='2'>&nbsp;</td></tr>
+                <tr>
+                    <td colspan='2'><b>Your Information</b></td>
+                </tr>
+                <tr>
+                    <td>Name</td>
+                    <td><input type='text' name='uploader_name' placeholder='Anon E. Mous' required></td>
+                </tr>
+                <tr>
+                    <td>Email</td>
+                    <td><input type='text' name='uploader_email' placeholder='anon@example.com' required></td>
+                </tr>
+                <tr><td colspan='2'>&nbsp;</td></tr>
+                <tr>
+                    <td colspan='2'>
+                        <input type='submit' value='Submit'>
+                    </td>
+                </tr>
+                </table>
+            </div>
+        </form>
+    </div>
+    <script type='text/javascript'>
+        $('.datepicker').datepicker();
+    </script>
+{% end %}

@@ -1,0 +1,28 @@
+<!doctype html>
+<html>
+  <title>
+    {% block title %}
+    {% end %}
+  </title>
+  <head>
+    <link type='text/css' href='/static/style.css' rel='stylesheet' />
+    <link href='//code.jquery.com/ui/1.11.4/themes/smoothness/jquery-ui.css' rel='stylesheet' />
+    <script src='//code.jquery.com/jquery-1.10.2.js'></script>
+    <script src='//code.jquery.com/ui/1.11.4/jquery-ui.js'></script>
+  </head>
+  <body>
+    <h1>Ann Arbor Area Government Document Repository</h1>
+    <div class='navbar'>
+      <ul>
+        <li><a href='/'>Home</a></li>
+        <li><a href='/add'>Add Document</a></li>
+        <li><a href='/search'>Search</a></li>
+        <li><a href='/orgs'>View by Organization</a></li>
+        <li><a href='/submitters'>View by Submitter</a></li>
+      </ul>
+    </div>
+    <br /><br /><br />
+    {% block body %}
+    {% end %}
+  </body>
+</html>

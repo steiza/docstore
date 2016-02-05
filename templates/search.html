@@ -1,0 +1,67 @@
+{% extends 'base.html' %}
+
+{% block title %}
+Search A2 Government Document Repository
+{% end %}
+
+{% block body %}
+    <h3>Search Terms</h3>
+    <div class='spacer'>
+      <form action='' method='GET'>
+        {% if query %}
+          <input type='text' name='query' value='{{ xhtml_escape(query) }}'>
+        {% else %}
+          <input type='text' name='query'>
+        {% end %}
+        <input type='submit' value='Search'>
+        {% if offset %}
+          <input type='hidden' name='offset' value={{ xhtml_escape(str(offset)) }}>
+        {% else %}
+          <input type='hidden' name='offset'>
+        {% end %}
+      </form>
+    </div>
+    <br />
+    {% if len(matching_docs) == 0 %}
+      No results found
+    {% else %}
+      <h3>Search Results</h3>
+      <div class='spacer'>
+      <table class='results'>
+        <thead>
+        <tr>
+          <th>Title</th>
+          <th>Description</th>
+          <th>Uploaded On</th>
+          <th>Source Organization</th>
+          <th>Submitter Name</th>
+        </tr>
+        </thead>
+        {% for each_doc in matching_docs %}
+        <tr>
+          <td><a href='/view/{{ url_escape(str(each_doc.id)) }}'>{{ escape(each_doc.doc_title) }}</a></td>
+          <td>
+          {% if len(each_doc.doc_description) > 30 %}
+            {{ escape(each_doc.doc_description[:30]) }}...
+          {% else %}
+            {{ escape(each_doc.doc_description) }}
+          {% end %}
+          </td>
+          <td>{{ escape(each_doc.date_uploaded.strftime('%Y-%m-%d')) }}</td>
+          <td>{{ escape(each_doc.source_org) }}</td>
+          <td>{{ escape(each_doc.uploader_name) }}</td>
+        </tr>
+        {% end %}
+      </table>
+    {% end %}
+    <br /><br />
+    {% if offset > 0 %}
+        <a href='/search?query={{ url_escape(query) }}&offset={{ max(0, offset-20) }}'>&lt; Previous</a>
+    {% end %}
+    Results {{ escape(str(offset+1)) }} to {{ escape(str(offset+len(matching_docs))) }} of {{ escape(str(count)) }}
+    {% if offset+len(matching_docs) < count %}
+        <a href='/search?query={{ url_escape(query) }}&offset={{ escape(str(offset+20)) }}'>Next &gt;</a>
+    {% end %}
+    </div>
+{% end %}
+

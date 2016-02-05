@@ -1,0 +1,25 @@
+{% extends 'base.html' %}
+
+{% block title %}
+Organizations of A2 Government Document Repository
+{% end %}
+
+{% block body %}
+  <h3>Organizations</h3>
+    <div class='spacer'>
+      <table class='results'>
+        <thead>
+        <tr>
+          <th>Organization Name</th>
+          <th>Document Count</th>
+        </tr>
+        </thead>
+        {% for each_row in org_results %}
+        <tr>
+          <td><a href='/search?query={{ url_escape(each_row[0]) }}'>{{ escape(each_row[0]) }}<a></td>
+          <td class='number'>{{ escape( str(each_row[1]) ) }}</td>
+        </tr>
+        {% end %}
+      </table>
+    </div>
+{% end %}
