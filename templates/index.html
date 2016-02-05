@@ -24,7 +24,7 @@ A2 Government Document Repository
             {% for each_doc in recent_docs %}
                 <tr>
                     <td><a href='/view/{{ url_escape(str(each_doc.id)) }}'>{{ escape(each_doc.doc_title) }}</a></td>
-                    <td>{{ escape(each_doc.date_uploaded.strftime('%Y-%m-%d')) }}</td>
+                    <td class='number'>{{ escape(each_doc.date_uploaded.strftime('%Y-%m-%d')) }}</td>
                     <td>{{ escape(each_doc.source_org) }}</td>
                 </tr>
             {% end %}

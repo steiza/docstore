@@ -67,3 +67,7 @@ li a:hover {
 td.number {
   text-align: right;
 }
+
+td.long {
+  vertical-align: top;
+}

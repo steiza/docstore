@@ -119,6 +119,8 @@ class SearchHandler(RequestHandler):
                 DocModel.source_org.like('%%%s%%' % query_arg),
                 DocModel.uploader_name.like('%%%s%%' % query_arg)
                 ))
+        else:
+            query_arg = ''
 
         query = query.order_by(desc(DocModel.date_uploaded))
 
