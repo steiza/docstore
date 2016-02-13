@@ -39,17 +39,17 @@ Search A2 Government Document Repository
         </thead>
         {% for each_doc in matching_docs %}
         <tr>
-          <td><a href='/view/{{ url_escape(str(each_doc.id)) }}'>{{ escape(each_doc.doc_title) }}</a></td>
+          <td><a href='/view/{{ url_escape(str(each_doc.id)) }}'>{{ each_doc.doc_title }}</a></td>
           <td>
           {% if len(each_doc.doc_description) > 30 %}
-            {{ escape(each_doc.doc_description[:30]) }}...
+            {{ each_doc.doc_description[:30] }}...
           {% else %}
-            {{ escape(each_doc.doc_description) }}
+            {{ each_doc.doc_description }}
           {% end %}
           </td>
-          <td class='number'>{{ escape(each_doc.date_uploaded.strftime('%Y-%m-%d')) }}</td>
-          <td>{{ escape(each_doc.source_org) }}</td>
-          <td>{{ escape(each_doc.uploader_name) }}</td>
+          <td class='number'>{{ each_doc.date_uploaded.strftime('%Y-%m-%d') }}</td>
+          <td>{{ each_doc.source_org }}</td>
+          <td>{{ each_doc.uploader_name }}</td>
         </tr>
         {% end %}
       </table>
@@ -58,9 +58,9 @@ Search A2 Government Document Repository
     {% if offset > 0 %}
         <a href='/search?query={{ url_escape(query) }}&offset={{ max(0, offset-20) }}'>&lt; Previous</a>
     {% end %}
-    Results {{ escape(str(offset+1)) }} to {{ escape(str(offset+len(matching_docs))) }} of {{ escape(str(count)) }}
+    Results {{ str(offset+1) }} to {{ str(offset+len(matching_docs)) }} of {{ str(count) }}
     {% if offset+len(matching_docs) < count %}
-        <a href='/search?query={{ url_escape(query) }}&offset={{ escape(str(offset+20)) }}'>Next &gt;</a>
+        <a href='/search?query={{ url_escape(query) }}&offset={{ str(offset+20) }}'>Next &gt;</a>
     {% end %}
     </div>
 {% end %}

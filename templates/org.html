@@ -16,8 +16,8 @@ Organizations of A2 Government Document Repository
         </thead>
         {% for each_row in org_results %}
         <tr>
-          <td><a href='/search?query={{ url_escape(each_row[0]) }}'>{{ escape(each_row[0]) }}<a></td>
-          <td class='number'>{{ escape( str(each_row[1]) ) }}</td>
+          <td><a href='/search?query={{ url_escape(each_row[0]) }}'>{{ each_row[0] }}<a></td>
+          <td class='number'>{{ str(each_row[1]) }}</td>
         </tr>
         {% end %}
       </table>

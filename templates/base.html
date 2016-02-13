@@ -9,18 +9,25 @@
     <link href='//code.jquery.com/ui/1.11.4/themes/smoothness/jquery-ui.css' rel='stylesheet' />
     <script src='//code.jquery.com/jquery-1.10.2.js'></script>
     <script src='//code.jquery.com/ui/1.11.4/jquery-ui.js'></script>
+    {% block head %}
+    {% end %}
   </head>
   <body>
-    <h1>Ann Arbor Area Government Document Repository</h1>
-    <div class='navbar'>
-      <ul>
-        <li><a href='/'>Home</a></li>
-        <li><a href='/add'>Add Document</a></li>
-        <li><a href='/search'>Search</a></li>
-        <li><a href='/orgs'>View by Organization</a></li>
-        <li><a href='/submitters'>View by Submitter</a></li>
+  <h1>{{region}} Government Document Repository</h1>
+    <ul class='navbar'>
+      <li><a href='/'>Home</a></li>
+      <li><a href='/add'>Add Document</a></li>
+      <li><a href='/search'>Search</a></li>
+      <li><a href='/orgs'>View by Organization</a></li>
+      <li><a href='/submitters'>View by Submitter</a></li>
+      <ul class='right_nav'>
+      {% if authorized %}
+          <li><a href='/auth/?log_out=true'>Log Out</a></li>
+      {% else %}
+          <li>&nbsp;</li>
+      {% end  %}
       </ul>
-    </div>
+    </ul>
     <br /><br /><br />
     {% block body %}
     {% end %}

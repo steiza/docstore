@@ -8,6 +8,7 @@ Add Document
     <h3>Add Document</h3>
     <div class='spacer'>
         <form enctype='multipart/form-data' action='' method='POST'>
+            {% module xsrf_form_html() %}
             <table class='add_doc'>
                 <tr>
                     <td colspan='2'><b>Document Information</b></td>
@@ -46,12 +47,12 @@ Add Document
                     <td colspan='2'><b>Your Information</b></td>
                 </tr>
                 <tr>
-                    <td>Name</td>
-                    <td><input type='text' name='uploader_name' placeholder='Anon E. Mous' required></td>
+                    <td>Name*</td>
+                    <td><input type='text' name='uploader_name' placeholder='Anon E. Mous'></td>
                 </tr>
                 <tr>
-                    <td>Email</td>
-                    <td><input type='text' name='uploader_email' placeholder='anon@example.com' required></td>
+                    <td>Email*</td>
+                    <td><input type='text' name='uploader_email' placeholder='anon@example.com'></td>
                 </tr>
                 <tr><td colspan='2'>&nbsp;</td></tr>
                 <tr>

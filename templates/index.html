@@ -5,6 +5,13 @@ A2 Government Document Repository
 {% end %}
 
 {% block body %}
+    {% if notification %}
+        <div class='spacer'>
+            <div class='notification'>
+                {{ notification }}
+            </div>
+        </div>
+    {% end %}
     <h3>Search</h3>
     <div class='spacer'>
         <form action='/search' method='GET'>
@@ -23,9 +30,9 @@ A2 Government Document Repository
             </thead>
             {% for each_doc in recent_docs %}
                 <tr>
-                    <td><a href='/view/{{ url_escape(str(each_doc.id)) }}'>{{ escape(each_doc.doc_title) }}</a></td>
-                    <td class='number'>{{ escape(each_doc.date_uploaded.strftime('%Y-%m-%d')) }}</td>
-                    <td>{{ escape(each_doc.source_org) }}</td>
+                    <td><a href='/view/{{ url_escape(str(each_doc.id)) }}'>{{ each_doc.doc_title }}</a></td>
+                    <td class='number'>{{ each_doc.date_uploaded.strftime('%Y-%m-%d') }}</td>
+                    <td>{{ each_doc.source_org }}</td>
                 </tr>
             {% end %}
         </table>

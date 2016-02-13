@@ -1,55 +1,98 @@
 {% extends 'base.html' %}
 
 {% block title %}
-{{ escape(doc.doc_title) }}
+  {{ doc.doc_title }}
+{% end %}
+
+{% block head %}
+  {% if authorized %}
+    <script type='text/javascript'>
+      $(document).ready(function() {
+        function get_cookie(name) {
+          var r = document.cookie.match("\\b" + name + "=([^;]*)\\b");
+          return r ? r[1] : undefined;
+        }
+
+        $('#delete').click(function() {
+          var confirm_response = confirm('Are you sure you want to delete? There is no undo.');
+
+          data = {
+            'doc_id': {{ doc.id }},
+            '_xsrf': get_cookie('_xsrf')
+            };
+
+          if (confirm_response == true) {
+            $.ajax({
+              'type': 'POST',
+              'url': '/delete',
+              'data': data,
+              'success': function(response) {
+                if (response['success']) {
+                  window.location = '/';
+                }
+              }
+            });
+          }
+        });
+      });
+    </script>
+  {% end %}
 {% end %}
 
 {% block body %}
-    <h3>Document Details</h3>
+  <h3>Document Details</h3>
+  <div class='spacer'>
+    <table class='summary'>
+      <tr>
+        <td>Title</td>
+        <td>{{ doc.doc_title }}</td>
+      </tr>
+      <tr>
+        <td class='long'>Description</td>
+        <td>{{ doc.doc_description }}</td>
+      </tr>
+      <tr>
+        <td>Source Organization</td>
+        <td>{{ doc.source_org }}</td>
+      </tr>
+      <tr>
+        <td>Request Tracking Number</td>
+        {% if doc.tracking_number %}
+        <td>{{ doc.tracking_number }}</td>
+        {% else %}
+        <td>&nbsp;</td>
+        {% end %}
+      </tr>
+      <tr>
+        <td>Date Requested</td>
+        {% if doc.date_requested %}
+        <td>{{ doc.date_requested.strftime('%Y-%m-%d') }}</td>
+        {% else %}
+        <td>&nbsp;</td>
+        {% end %}
+      </tr>
+      <tr>
+        <td>Date Received</td>
+        {% if doc.date_received %}
+        <td>{{ doc.date_received.strftime('%Y-%m-%d') }}</td>
+        {% else %}
+        <td>&nbsp;</td>
+        {% end %}
+      </tr>
+      <tr>
+        <td>Submitter Name</td>
+        <td>{{ doc.uploader_name }}</td>
+      </tr>
+    </table>
+    <br /><br />
+    <a href='/file/{{ url_escape(str(doc.id)) }}/{{ url_escape(doc.filename) }}'>Download this document</a>
+  </div>
+  {% if authorized %}
+    <h3>Management Area</h3>
     <div class='spacer'>
-      <table class='summary'>
-        <tr>
-          <td>Title</td>
-          <td>{{ escape(doc.doc_title) }}</td>
-        </tr>
-        <tr>
-          <td class='long'>Description</td>
-          <td>{{ escape(doc.doc_description) }}</td>
-        </tr>
-        <tr>
-          <td>Source Organization</td>
-          <td>{{ escape(doc.source_org) }}</td>
-        </tr>
-        <tr>
-          <td>Request Tracking Number</td>
-          {% if doc.tracking_number %}
-          <td>{{ escape(doc.tracking_number) }}</td>
-          {% else %}
-          <td>&nbsp;</td>
-          {% end %}
-        </tr>
-        <tr>
-          <td>Date Requested</td>
-          {% if doc.date_requested %}
-          <td>{{ escape(doc.date_requested.strftime('%Y-%m-%d')) }}</td>
-          {% else %}
-          <td>&nbsp;</td>
-          {% end %}
-        </tr>
-        <tr>
-          <td>Date Received</td>
-          {% if doc.date_received %}
-          <td>{{ escape(doc.date_received.strftime('%Y-%m-%d')) }}</td>
-          {% else %}
-          <td>&nbsp;</td>
-          {% end %}
-        </tr>
-        <tr>
-          <td>Submitter Name</td>
-          <td>{{ escape(doc.uploader_name) }}</td>
-        </tr>
-      </table>
+      <a href='/edit/{{ url_escape(str(doc.id)) }}'>Edit Document</a>
       <br /><br />
-      <a href='/file/{{ url_escape(str(doc.id)) }}/{{ url_escape(doc.filename) }}'>Download this document</a>
+      <input id='delete' type='button' value='Delete Document' />
     </div>
+  {% end %}
 {% end %}

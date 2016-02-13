@@ -1,5 +1,9 @@
+import base64
 from datetime import datetime
 import os
+import shutil
+import urllib
+import yaml
 
 from sqlalchemy import Column, create_engine, desc, Date, func, Integer, or_, String
 from sqlalchemy.ext.declarative import declarative_base
@@ -10,33 +14,46 @@ from tornado.web import Application, RequestHandler, StaticFileHandler, stream_r
 
 class IndexHandler(RequestHandler):
 
-    def initialize(self, SessionMaker):
+    def initialize(self, region, SessionMaker):
+        self.__region = region
         self.__SessionMaker = SessionMaker
 
     def get(self):
+        authorized = self.get_secure_cookie('authorized')
+
         session = self.__SessionMaker()
         recent_docs = session.query(DocModel).order_by(desc('date_uploaded')).limit(10)
         session.close()
 
-        self.render('index.html', recent_docs=recent_docs)
+        notification = self.get_cookie('notification')
+
+        if notification:
+            notification = urllib.unquote(notification)
+            self.clear_cookie('notification')
+
+        self.render(
+            'index.html', region=self.__region, authorized=authorized,
+            recent_docs=recent_docs, notification=notification
+            )
 
 
 class AddHandler(RequestHandler):
 
-    def initialize(self, SessionMaker, stored_docs_path):
+    def initialize(self, region, SessionMaker, stored_docs_path):
+        self.__region = region
         self.__SessionMaker = SessionMaker
         self.__stored_docs_path = stored_docs_path
 
     def get(self):
-        self.render('add.html')
+        authorized = self.get_secure_cookie('authorized')
+
+        self.render('add.html', region=self.__region, authorized=authorized)
 
     def post(self):
         new_doc = DocModel()
 
         # Get required arguments
-        for each_property in ['doc_title', 'doc_description', 'source_org',
-                'uploader_name', 'uploader_email']:
-
+        for each_property in ['doc_title', 'doc_description', 'source_org']:
             value = self.get_argument(each_property)
             setattr(new_doc, each_property, value)
 
@@ -71,6 +88,12 @@ class AddHandler(RequestHandler):
 
         new_doc.date_received = date_received
 
+        new_doc.uploader_name = self.get_argument(
+            'uploader_name') or 'anonymous'
+
+        new_doc.uploader_email = self.get_argument(
+            'uploader_email') or 'anonymous@example.com'
+
         # Set metadata
         new_doc.date_uploaded = datetime.now().date()
         new_doc.filename = filename
@@ -92,15 +115,19 @@ class AddHandler(RequestHandler):
         fd.write(file_data)
         fd.close()
 
-        self.write('Document added, thanks!')
+        self.set_cookie('notification', urllib.quote('Document added; thanks!'))
+        self.redirect('/')
 
 
 class SearchHandler(RequestHandler):
 
-    def initialize(self, SessionMaker):
+    def initialize(self, region, SessionMaker):
+        self.__region = region
         self.__SessionMaker = SessionMaker
 
     def get(self):
+        authorized = self.get_secure_cookie('authorized')
+
         query_arg = self.get_argument('query', default=None)
         offset = self.get_argument('offset', default=None)
 
@@ -131,22 +158,28 @@ class SearchHandler(RequestHandler):
         session.close()
 
         self.render(
-            'search.html', query=query_arg, offset=offset, count=count,
+            'search.html', region=self.__region, authorized=authorized,
+            query=query_arg, offset=offset, count=count,
             matching_docs=matching_docs
             )
 
 
 class ViewHandler(RequestHandler):
 
-    def initialize(self, SessionMaker):
+    def initialize(self, region, SessionMaker):
+        self.__region = region
         self.__SessionMaker = SessionMaker
 
     def get(self, document_id):
+        authorized = self.get_secure_cookie('authorized')
+
         session = self.__SessionMaker()
         doc = session.query(DocModel).filter(DocModel.id == document_id).one()
         session.close()
 
-        self.render('view.html', doc=doc)
+        self.render(
+            'view.html', region=self.__region, authorized=authorized, doc=doc
+            )
 
 
 class DownloadHandler(RequestHandler):
@@ -177,12 +210,109 @@ class DownloadHandler(RequestHandler):
                 break
 
 
+class EditHandler(RequestHandler):
+
+    def initialize(self, region, SessionMaker):
+        self.__region = region
+        self.__SessionMaker = SessionMaker
+
+    def get(self, doc_id):
+        authorized = self.get_secure_cookie('authorized')
+
+        if not authorized:
+            self.set_status(400)
+            self.write('Not authorized')
+            return
+
+        session = self.__SessionMaker()
+        doc = session.query(DocModel).filter(DocModel.id == doc_id).one()
+        session.close()
+
+        # Make sure dates are in the form understood by JavaScript
+        if doc.date_requested:
+            doc.date_requested = doc.date_requested.strftime('%m/%d/%Y')
+
+        if doc.date_received:
+            doc.date_received = doc.date_received.strftime('%m/%d/%Y')
+
+        self.render(
+            'edit.html', region=self.__region, authorized=authorized, doc=doc
+            )
+
+    def post(self, doc_id):
+        session = self.__SessionMaker()
+        doc = session.query(DocModel).filter(DocModel.id == doc_id).one()
+
+        for each_property in ['doc_title', 'doc_description', 'source_org',
+            'tracking_number', 'date_requested', 'date_received',
+            'uploader_name', 'uploader_email']:
+
+            value = self.get_argument(each_property)
+
+            if each_property.startswith('date_'):
+                if value:
+                    value = datetime.strptime(value, '%m/%d/%Y').date()
+                else:
+                    value = None
+
+            setattr(doc, each_property, value)
+
+        session.add(doc)
+        session.commit()
+
+        self.set_cookie('notification', urllib.quote('Document updated; thanks!'))
+        self.redirect('/')
+
+
+class DeleteHandler(RequestHandler):
+
+    def initialize(self, region, SessionMaker, stored_docs_path):
+        self.__region = region
+        self.__SessionMaker = SessionMaker
+        self.__stored_docs_path = stored_docs_path
+
+    def post(self):
+        # Make sure we are authorized
+        authorized = self.get_secure_cookie('authorized')
+
+        if not authorized:
+            self.set_status(400)
+            self.write('Not authorized')
+            return
+
+        doc_id = self.get_argument('doc_id', None)
+
+        if not doc_id:
+            self.set_stataus(401)
+            self.write('Bad request, no doc_id')
+            return
+
+        # Remove file on disk
+        shutil.rmtree(os.path.join(self.__stored_docs_path, str(doc_id)))
+
+        # Remove metadata
+        session = self.__SessionMaker()
+        doc = session.query(DocModel).filter(DocModel.id == doc_id).one()
+        session.delete(doc)
+        session.commit()
+
+        self.set_cookie(
+            'notification',
+            urllib.quote('Deleted document "%s"' % doc.doc_title.encode('utf8'))
+            )
+
+        self.write({'success': True})
+
+
 class OrgHandler(RequestHandler):
 
-    def initialize(self, SessionMaker):
+    def initialize(self, region, SessionMaker):
+        self.__region = region
         self.__SessionMaker = SessionMaker
 
     def get(self):
+        authorized = self.get_secure_cookie('authorized')
+
         session = self.__SessionMaker()
 
         org_results = session.query(
@@ -191,15 +321,21 @@ class OrgHandler(RequestHandler):
 
         session.close()
 
-        self.render('org.html', org_results=org_results)
+        self.render(
+            'org.html', region=self.__region, authorized=authorized,
+            org_results=org_results
+            )
 
 
 class SubmitterHandler(RequestHandler):
 
-    def initialize(self, SessionMaker):
+    def initialize(self, region, SessionMaker):
+        self.__region = region
         self.__SessionMaker = SessionMaker
 
     def get(self):
+        authorized = self.get_secure_cookie('authorized')
+
         session = self.__SessionMaker()
 
         submitter_results = session.query(
@@ -208,7 +344,49 @@ class SubmitterHandler(RequestHandler):
 
         session.close()
 
-        self.render('submitter.html', submitter_results=submitter_results)
+        self.render(
+            'submitter.html', region=self.__region, authorized=authorized,
+            submitter_results=submitter_results,
+            )
+
+
+class AuthHandler(RequestHandler):
+
+    def initialize(self, password):
+        self.__password = password
+
+    def get(self):
+        # First, check if this is a log out request
+        log_out = self.get_argument('log_out', default=None)
+
+        if log_out:
+            self.clear_cookie('authorized')
+            self.set_cookie('notification', urllib.quote('You have signed out'))
+            self.redirect('/')
+            return
+
+        # If not, make sure basic auth is submitted
+        auth_header = self.request.headers.get('Authorization')
+
+        if not auth_header:
+            self.set_header('WWW-Authenticate', 'Basic realm=/auth/')
+            self.set_status(401)
+
+            return
+
+        else:
+            # We have basic auth info; check it
+            auth_decoded = base64.decodestring(auth_header[6:])
+            username, password = auth_decoded.split(':', 2)
+
+            if password == self.__password:
+                self.set_secure_cookie('authorized', 'true')
+                self.set_cookie('notification', urllib.quote('You have signed in succesfully!'))
+
+            else:
+                self.set_cookie('notification', urllib.quote('Password incorrect - auth failed'))
+
+            self.redirect('/')
 
 
 Base = declarative_base()
@@ -239,21 +417,30 @@ if __name__ == '__main__':
     Base.metadata.create_all(engine)
     SessionMaker = sessionmaker(engine)
 
+    with open('settings.yml', 'r') as fd:
+        settings = yaml.load(fd)
+
     app = Application([
         (r'/static/(.*)', StaticFileHandler, {'path': static_path}),
 
-        (r'/', IndexHandler, dict(SessionMaker=SessionMaker)),
+        (r'/', IndexHandler, dict(
+            region=settings['region'],
+            SessionMaker=SessionMaker
+            )),
 
         (r'/add', AddHandler, dict(
+            region=settings['region'],
             SessionMaker=SessionMaker,
             stored_docs_path=stored_docs_path
             )),
 
         (r'/search', SearchHandler, dict(
+            region=settings['region'],
             SessionMaker=SessionMaker
             )),
 
         (r'/view/([0-9]+)', ViewHandler, dict(
+            region=settings['region'],
             SessionMaker=SessionMaker
             )),
 
@@ -261,17 +448,36 @@ if __name__ == '__main__':
             stored_docs_path=stored_docs_path
             )),
 
+        (r'/edit/([0-9]+)', EditHandler, dict(
+            region=settings['region'],
+            SessionMaker=SessionMaker
+            )),
+
+        (r'/delete', DeleteHandler, dict(
+            region=settings['region'],
+            SessionMaker=SessionMaker,
+            stored_docs_path=stored_docs_path
+            )),
+
         (r'/orgs', OrgHandler, dict(
+            region=settings['region'],
             SessionMaker=SessionMaker
             )),
 
         (r'/submitters', SubmitterHandler, dict(
+            region=settings['region'],
             SessionMaker=SessionMaker
+            )),
+
+        (r'/auth/', AuthHandler, dict(
+            password=settings['password']
             ))
 
         ],
 
         template_path=template_path,
+        cookie_secret=settings['cookie_secret'],
+        xsrf_cookies=True,
         debug=True
         )
 

@@ -26,10 +26,28 @@ li a:hover {
   background-color: #111;
 }
 
-.navbar {
-  width: 100%;
+ul.navbar {
   background-color: #333;
-  height: 48px;
+  list-style-type: none;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+ul.right_nav {
+  list-style-type: none;
+}
+
+.navbar li {
+  float: left;
+}
+
+.right_nav li {
+  float: right;
+}
+
+.navbar a {
+  display: block;
 }
 
 .spacer {
@@ -70,4 +88,11 @@ td.number {
 
 td.long {
   vertical-align: top;
+}
+
+.notification {
+  background-color: lightgoldenrodyellow;
+  padding: 18px;
+  border: 4px yellow;
+  border-style: solid;
 }
