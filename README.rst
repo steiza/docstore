@@ -5,19 +5,19 @@ This project is meant for any civics-minded organization that needs a simple pla
 
 On the homepage you can see recently uploaded documents:
 
-.. image:: https://raw.github.com/steiza/docstore/readme_images/home_page.png
+.. image:: https://raw.github.com/steiza/docstore/master/readme_images/home_page.png
 
 There's a search page that will search through the document metadata (but not the document contents):
 
-.. image:: https://raw.github.com/steiza/docstore/readme_images/search.png
+.. image:: https://raw.github.com/steiza/docstore/master/readme_images/search.png
 
 Clicking on a document will take you to a page with document details and a download link:
 
-.. image:: https://raw.github.com/steiza/docstore/readme_images/doc.png
+.. image:: https://raw.github.com/steiza/docstore/master/readme_images/doc.png
 
 And there's a basic password protected management page to clean up details or delete documents if needed:
 
-.. image:: https://raw.github.com/steiza/docstore/readme_images/edit.png
+.. image:: https://raw.github.com/steiza/docstore/master/readme_images/edit.png
 
 Document metadata is stored in an on-disk sqlite database and the files themselves are stored on disk.
 
