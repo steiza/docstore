@@ -15,7 +15,7 @@ Add Document
         </tr>
         <tr>
           <td>Title</td>
-          <td><input type='text' name='doc_title' style='width:20em;' value='{{ xhtml_escape(doc.doc_title) }}' placeholder='Q4 Important Meeting Minutes' required></td>
+          <td><input type='text' name='doc_title' style='width:20em;' value="{{ doc.doc_title }}" placeholder='Q4 Important Meeting Minutes' required></td>
         </tr>
         <tr>
           <td>Description</td>
@@ -27,13 +27,13 @@ Add Document
         </tr>
         <tr>
           <td>Source Organization</td>
-          <td><input type='text' name='source_org' value='{{ xhtml_escape(doc.source_org) }}' placeholder='Important Commission' required></td>
+          <td><input type='text' name='source_org' value="{{ doc.source_org }}" placeholder='Important Commission' required></td>
         </tr>
         <tr>
           <td>Request Tracking Number*</td>
           <td>
             {% if doc.tracking_number %}
-              <input type='text' name='tracking_number' value='{{ xhtml_escape(doc.tracking_number) }}' placeholder='00011235813'>
+              <input type='text' name='tracking_number' value="{{ doc.tracking_number }}" placeholder='00011235813'>
             {% else %}
               <input type='text' name='tracking_number' placeholder='00011235813'>
             {% end %}
@@ -43,7 +43,7 @@ Add Document
           <td>Date Requested*</td>
           <td>
             {% if doc.date_requested %}
-              <input type='text' class='datepicker' value='{{ xhtml_escape(doc.date_requested) }}' name='date_requested'>
+              <input type='text' class='datepicker' value="{{ doc.date_requested }}" name='date_requested'>
             {% else %}
               <input type='text' class='datepicker' name='date_requested'>
             {% end %}
@@ -53,7 +53,7 @@ Add Document
           <td>Date Received*</td>
           <td>
             {% if doc.date_received %}
-              <input type='text' class='datepicker' value='{{ xhtml_escape(doc.date_received) }}' name='date_received'>
+              <input type='text' class='datepicker' value="{{ doc.date_received }}" name='date_received'>
             {% else %}
               <input type='text' class='datepicker' name='date_received'>
             {% end %}
@@ -68,7 +68,7 @@ Add Document
           <td>Name</td>
           <td>
             {% if doc.uploader_name %}
-              <input type='text' name='uploader_name' value='{{ xhtml_escape(doc.uploader_name) }}' placeholder='Anon E. Mous'>
+              <input type='text' name='uploader_name' value="{{ doc.uploader_name }}" placeholder='Anon E. Mous'>
             {% else %}
               <input type='text' name='uploader_name' placeholder='Anon E. Mous'>
             {% end %}
@@ -78,7 +78,7 @@ Add Document
           <td>Email</td>
           <td>
             {% if doc.uploader_email %}
-              <input type='text' name='uploader_email' value='{{ xhtml_escape(doc.uploader_email) }}' placeholder='anon@example.com'>
+              <input type='text' name='uploader_email' value="{{ doc.uploader_email }}" placeholder='anon@example.com'>
             {% else %}
               <input type='text' name='uploader_email' placeholder='anon@example.com'>
             {% end %}

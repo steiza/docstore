@@ -1,8 +1,9 @@
 import base64
 from datetime import datetime
+import logging
 import os
 import shutil
-import urllib
+from urllib import quote, unquote
 import yaml
 
 from sqlalchemy import Column, create_engine, desc, Date, func, Integer, or_, String
@@ -28,7 +29,7 @@ class IndexHandler(RequestHandler):
         notification = self.get_cookie('notification')
 
         if notification:
-            notification = urllib.unquote(notification)
+            notification = unquote(notification)
             self.clear_cookie('notification')
 
         self.render(
@@ -115,7 +116,7 @@ class AddHandler(RequestHandler):
         fd.write(file_data)
         fd.close()
 
-        self.set_cookie('notification', urllib.quote('Document added; thanks!'))
+        self.set_cookie('notification', quote('Document added; thanks!'))
         self.redirect('/')
 
 
@@ -195,7 +196,7 @@ class DownloadHandler(RequestHandler):
             self.write('File not found')
 
         self.set_header('Content-Type', 'application/ocet-stream')
-        self.set_header('Content-Disposition', 'attachment; filename=%s' % filename)
+        self.set_header('Content-Disposition', 'attachment; filename={0}'.format(filename))
 
         fd = open(file_path, 'r')
 
@@ -260,7 +261,7 @@ class EditHandler(RequestHandler):
         session.add(doc)
         session.commit()
 
-        self.set_cookie('notification', urllib.quote('Document updated; thanks!'))
+        self.set_cookie('notification', quote('Document updated; thanks!'))
         self.redirect('/')
 
 
@@ -298,7 +299,7 @@ class DeleteHandler(RequestHandler):
 
         self.set_cookie(
             'notification',
-            urllib.quote('Deleted document "%s"' % doc.doc_title.encode('utf8'))
+            quote('Deleted document: {}"'.format(doc.doc_title.encode('utf8')))
             )
 
         self.write({'success': True})
@@ -361,7 +362,7 @@ class AuthHandler(RequestHandler):
 
         if log_out:
             self.clear_cookie('authorized')
-            self.set_cookie('notification', urllib.quote('You have signed out'))
+            self.set_cookie('notification', quote('You have signed out'))
             self.redirect('/')
             return
 
@@ -371,7 +372,6 @@ class AuthHandler(RequestHandler):
         if not auth_header:
             self.set_header('WWW-Authenticate', 'Basic realm=/auth/')
             self.set_status(401)
-
             return
 
         else:
@@ -381,12 +381,13 @@ class AuthHandler(RequestHandler):
 
             if password == self.__password:
                 self.set_secure_cookie('authorized', 'true')
-                self.set_cookie('notification', urllib.quote('You have signed in succesfully!'))
+                self.set_cookie('notification', quote('You have signed in succesfully!'))
+                self.redirect('/')
 
             else:
-                self.set_cookie('notification', urllib.quote('Password incorrect - auth failed'))
-
-            self.redirect('/')
+                self.set_header('WWW-Authenticate', 'Basic realm=/auth/')
+                self.set_status(401)
+                return
 
 
 Base = declarative_base()
@@ -419,6 +420,18 @@ if __name__ == '__main__':
 
     with open('settings.yml', 'r') as fd:
         settings = yaml.load(fd)
+
+    loggers = ['tornado.access', 'tornado.application', 'tornado.general']
+
+    for each_logger in loggers:
+        logger = logging.getLogger(each_logger)
+        logger.setLevel(logging.DEBUG)
+
+        handler = logging.StreamHandler()
+        handler.setFormatter(
+            logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
+
+        logger.addHandler(handler)
 
     app = Application([
         (r'/static/(.*)', StaticFileHandler, {'path': static_path}),
@@ -477,8 +490,7 @@ if __name__ == '__main__':
 
         template_path=template_path,
         cookie_secret=settings['cookie_secret'],
-        xsrf_cookies=True,
-        debug=True
+        xsrf_cookies=True
         )
 
     app.listen(8000)

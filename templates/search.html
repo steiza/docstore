@@ -9,13 +9,13 @@ Search A2 Government Document Repository
     <div class='spacer'>
       <form action='' method='GET'>
         {% if query %}
-          <input type='text' name='query' value='{{ xhtml_escape(query) }}'>
+          <input type='text' name='query' value="{{ query }}">
         {% else %}
           <input type='text' name='query'>
         {% end %}
         <input type='submit' value='Search'>
         {% if offset %}
-          <input type='hidden' name='offset' value={{ xhtml_escape(str(offset)) }}>
+          <input type='hidden' name='offset' value="{{ str(offset) }}">
         {% else %}
           <input type='hidden' name='offset'>
         {% end %}
