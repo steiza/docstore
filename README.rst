@@ -26,5 +26,6 @@ If you want to run your own version, after you check out the repository you'll n
     region: 'Ann Arbor Area'
     password: '__make_your_own_management_password__'
     cookie_secret: '__this_can_be_anything_it_is_just_for_the_server__'
+    google_analytics_id: '__optional_just_leave_off_if_not_needed__'
 
 Note that this project uses HTTP Basic auth - if you host this project without HTTPS the management password will be sent over the network in the clear.

@@ -15,8 +15,9 @@ from tornado.web import Application, RequestHandler, StaticFileHandler, stream_r
 
 class IndexHandler(RequestHandler):
 
-    def initialize(self, region, SessionMaker):
+    def initialize(self, region, google_analytics_id, SessionMaker):
         self.__region = region
+        self.__google_analytics_id = google_analytics_id
         self.__SessionMaker = SessionMaker
 
     def get(self):
@@ -33,22 +34,31 @@ class IndexHandler(RequestHandler):
             self.clear_cookie('notification')
 
         self.render(
-            'index.html', region=self.__region, authorized=authorized,
-            recent_docs=recent_docs, notification=notification
+            'index.html', region=self.__region,
+            google_analytics_id=self.__google_analytics_id,
+            authorized=authorized, recent_docs=recent_docs,
+            notification=notification
             )
 
 
 class AddHandler(RequestHandler):
 
-    def initialize(self, region, SessionMaker, stored_docs_path):
+    def initialize(
+        self, region, google_analytics_id, SessionMaker, stored_docs_path):
+
         self.__region = region
+        self.__google_analytics_id = google_analytics_id
         self.__SessionMaker = SessionMaker
         self.__stored_docs_path = stored_docs_path
 
     def get(self):
         authorized = self.get_secure_cookie('authorized')
 
-        self.render('add.html', region=self.__region, authorized=authorized)
+        self.render(
+            'add.html', region=self.__region,
+            google_analytics_id=self.__google_analytics_id,
+            authorized=authorized
+            )
 
     def post(self):
         new_doc = DocModel()
@@ -122,8 +132,9 @@ class AddHandler(RequestHandler):
 
 class SearchHandler(RequestHandler):
 
-    def initialize(self, region, SessionMaker):
+    def initialize(self, region, google_analytics_id, SessionMaker):
         self.__region = region
+        self.__google_analytics_id = google_analytics_id
         self.__SessionMaker = SessionMaker
 
     def get(self):
@@ -159,16 +170,18 @@ class SearchHandler(RequestHandler):
         session.close()
 
         self.render(
-            'search.html', region=self.__region, authorized=authorized,
-            query=query_arg, offset=offset, count=count,
+            'search.html', region=self.__region,
+            google_analytics_id=self.__google_analytics_id,
+            authorized=authorized, query=query_arg, offset=offset, count=count,
             matching_docs=matching_docs
             )
 
 
 class ViewHandler(RequestHandler):
 
-    def initialize(self, region, SessionMaker):
+    def initialize(self, region, google_analytics_id, SessionMaker):
         self.__region = region
+        self.__google_analytics_id = google_analytics_id
         self.__SessionMaker = SessionMaker
 
     def get(self, document_id):
@@ -179,7 +192,9 @@ class ViewHandler(RequestHandler):
         session.close()
 
         self.render(
-            'view.html', region=self.__region, authorized=authorized, doc=doc
+            'view.html', region=self.__region,
+            google_analytics_id=self.__google_analytics_id,
+            authorized=authorized, doc=doc
             )
 
 
@@ -213,8 +228,9 @@ class DownloadHandler(RequestHandler):
 
 class EditHandler(RequestHandler):
 
-    def initialize(self, region, SessionMaker):
+    def initialize(self, region, google_analytics_id, SessionMaker):
         self.__region = region
+        self.__google_analytics_id = google_analytics_id
         self.__SessionMaker = SessionMaker
 
     def get(self, doc_id):
@@ -237,7 +253,9 @@ class EditHandler(RequestHandler):
             doc.date_received = doc.date_received.strftime('%m/%d/%Y')
 
         self.render(
-            'edit.html', region=self.__region, authorized=authorized, doc=doc
+            'edit.html', region=self.__region,
+            google_analytics_id=self.__google_analytics_id,
+            authorized=authorized, doc=doc
             )
 
     def post(self, doc_id):
@@ -267,8 +285,7 @@ class EditHandler(RequestHandler):
 
 class DeleteHandler(RequestHandler):
 
-    def initialize(self, region, SessionMaker, stored_docs_path):
-        self.__region = region
+    def initialize(self, SessionMaker, stored_docs_path):
         self.__SessionMaker = SessionMaker
         self.__stored_docs_path = stored_docs_path
 
@@ -307,8 +324,9 @@ class DeleteHandler(RequestHandler):
 
 class OrgHandler(RequestHandler):
 
-    def initialize(self, region, SessionMaker):
+    def initialize(self, region, google_analytics_id, SessionMaker):
         self.__region = region
+        self.__google_analytics_id = google_analytics_id
         self.__SessionMaker = SessionMaker
 
     def get(self):
@@ -323,15 +341,18 @@ class OrgHandler(RequestHandler):
         session.close()
 
         self.render(
-            'org.html', region=self.__region, authorized=authorized,
+            'org.html', region=self.__region,
+            google_analytics_id=self.__google_analytics_id,
+            authorized=authorized,
             org_results=org_results
             )
 
 
 class SubmitterHandler(RequestHandler):
 
-    def initialize(self, region, SessionMaker):
+    def initialize(self, region, google_analytics_id, SessionMaker):
         self.__region = region
+        self.__google_analytics_id = google_analytics_id
         self.__SessionMaker = SessionMaker
 
     def get(self):
@@ -346,7 +367,9 @@ class SubmitterHandler(RequestHandler):
         session.close()
 
         self.render(
-            'submitter.html', region=self.__region, authorized=authorized,
+            'submitter.html', region=self.__region,
+            google_analytics_id=self.__google_analytics_id,
+            authorized=authorized,
             submitter_results=submitter_results,
             )
 
@@ -421,6 +444,8 @@ if __name__ == '__main__':
     with open('settings.yml', 'r') as fd:
         settings = yaml.load(fd)
 
+    google_analytics_id = settings.get('google_analytics_id', None)
+
     loggers = ['tornado.access', 'tornado.application', 'tornado.general']
 
     for each_logger in loggers:
@@ -438,22 +463,26 @@ if __name__ == '__main__':
 
         (r'/', IndexHandler, dict(
             region=settings['region'],
+            google_analytics_id=google_analytics_id,
             SessionMaker=SessionMaker
             )),
 
         (r'/add', AddHandler, dict(
             region=settings['region'],
+            google_analytics_id=google_analytics_id,
             SessionMaker=SessionMaker,
             stored_docs_path=stored_docs_path
             )),
 
         (r'/search', SearchHandler, dict(
             region=settings['region'],
+            google_analytics_id=google_analytics_id,
             SessionMaker=SessionMaker
             )),
 
         (r'/view/([0-9]+)', ViewHandler, dict(
             region=settings['region'],
+            google_analytics_id=google_analytics_id,
             SessionMaker=SessionMaker
             )),
 
@@ -463,22 +492,24 @@ if __name__ == '__main__':
 
         (r'/edit/([0-9]+)', EditHandler, dict(
             region=settings['region'],
+            google_analytics_id=google_analytics_id,
             SessionMaker=SessionMaker
             )),
 
         (r'/delete', DeleteHandler, dict(
-            region=settings['region'],
             SessionMaker=SessionMaker,
             stored_docs_path=stored_docs_path
             )),
 
         (r'/orgs', OrgHandler, dict(
             region=settings['region'],
+            google_analytics_id=google_analytics_id,
             SessionMaker=SessionMaker
             )),
 
         (r'/submitters', SubmitterHandler, dict(
             region=settings['region'],
+            google_analytics_id=google_analytics_id,
             SessionMaker=SessionMaker
             )),
 
