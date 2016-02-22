@@ -1,0 +1,4 @@
+region: 'My City'
+password: 'MySecureAdminPassword'
+cookie_secret: 'RandomCookieSecret'
+google_analytics_id: 'UA-000000-0'
