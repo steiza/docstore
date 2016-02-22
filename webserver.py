@@ -4,13 +4,13 @@ import logging
 import os
 import shutil
 from urllib import quote, unquote
-import yaml
 
 from sqlalchemy import Column, create_engine, desc, Date, func, Integer, or_, String
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from tornado.ioloop import IOLoop
 from tornado.web import Application, RequestHandler, StaticFileHandler, stream_request_body
+import yaml
 
 
 class IndexHandler(RequestHandler):
