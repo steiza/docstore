@@ -23,9 +23,9 @@ Document metadata is stored in an on-disk sqlite database and the files themselv
 
 If you want to run your own version, after you check out the repository you'll need to create a basic `settings.yml` file::
 
-    region: 'Ann Arbor Area'
+    region: 'My City'
     password: '__make_your_own_management_password__'
     cookie_secret: '__this_can_be_anything_it_is_just_for_the_server__'
-    google_analytics_id: '__optional_just_leave_off_if_not_needed__'
+    google_analytics_id: '__optional_just_remove_this_line_if_not_needed__'
 
 Note that this project uses HTTP Basic auth - if you host this project without HTTPS the management password will be sent over the network in the clear.
