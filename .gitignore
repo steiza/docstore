@@ -1,2 +1,2 @@
 settings.yml
-storage
+storage/db/sqlite.db
