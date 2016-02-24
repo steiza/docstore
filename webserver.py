@@ -3,6 +3,7 @@ from datetime import datetime
 import logging
 import os
 import shutil
+import sys
 from urllib import quote, unquote
 
 from sqlalchemy import Column, create_engine, desc, Date, func, Integer, or_, String
@@ -455,6 +456,14 @@ if __name__ == '__main__':
     engine = create_engine('sqlite:///storage/db/sqlite.db')
     Base.metadata.create_all(engine)
     SessionMaker = sessionmaker(engine)
+
+    if not os.path.exists('settings.yml'):
+        print ''
+        print 'Error: application needs settings.yml file to run'
+        print ''
+        print 'For details see settings.sample.yml or README.rst'
+        print ''
+        sys.exit(-1)
 
     with open('settings.yml', 'r') as fd:
         settings = yaml.load(fd)

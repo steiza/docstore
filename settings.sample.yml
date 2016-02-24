@@ -1,4 +1,4 @@
 region: 'My City'
-password: 'MySecureAdminPassword'
-cookie_secret: 'RandomCookieSecret'
-google_analytics_id: 'UA-000000-0'
+password: '__make_your_own_management_password__'
+cookie_secret: '__this_can_be_anything_it_is_just_for_the_server__'
+google_analytics_id: '__optional_just_remove_this_line_if_not_needed__'
