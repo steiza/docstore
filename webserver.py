@@ -54,10 +54,18 @@ class AddHandler(RequestHandler):
     def get(self):
         authorized = self.get_secure_cookie('authorized')
 
+        session = self.__SessionMaker()
+
+        org_results = session.query(DocModel.source_org).group_by(
+                DocModel.source_org).order_by(DocModel.source_org).all()
+
+        org_names = [each[0] for each in org_results]
+
+        session.close()
+
         self.render(
-            'add.html', region=self.__region,
-            google_analytics_id=self.__google_analytics_id,
-            authorized=authorized
+            'add.html', region=self.__region, org_names=org_names,
+            google_analytics_id=self.__google_analytics_id, authorized=authorized
             )
 
     def post(self):
@@ -242,7 +250,14 @@ class EditHandler(RequestHandler):
             return
 
         session = self.__SessionMaker()
+
         doc = session.query(DocModel).filter(DocModel.id == doc_id).one()
+
+        org_results = session.query(DocModel.source_org).group_by(
+                DocModel.source_org).order_by(DocModel.source_org).all()
+
+        org_names = [each[0] for each in org_results]
+
         session.close()
 
         # Make sure dates are in the form understood by JavaScript
@@ -253,7 +268,7 @@ class EditHandler(RequestHandler):
             doc.date_received = doc.date_received.strftime('%m/%d/%Y')
 
         self.render(
-            'edit.html', region=self.__region,
+            'edit.html', region=self.__region, org_names=org_names,
             google_analytics_id=self.__google_analytics_id,
             authorized=authorized, doc=doc
             )

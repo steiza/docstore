@@ -27,7 +27,7 @@ Add Document
         </tr>
         <tr>
           <td>Source Organization</td>
-          <td><input type='text' name='source_org' value="{{ doc.source_org }}" placeholder='Important Commission' required></td>
+          <td><input type='text' name='source_org' id='source_org' value="{{ doc.source_org }}" placeholder='Important Commission' required></td>
         </tr>
         <tr>
           <td>Request Tracking Number*</td>
@@ -96,6 +96,9 @@ Add Document
 </div>
 
 <script type='text/javascript'>
+  var org_names = {% raw json_encode(org_names) %};
+  $('#source_org').autocomplete({source: org_names});
+
   $('.datepicker').datepicker();
 </script>
 {% end %}
