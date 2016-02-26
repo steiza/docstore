@@ -6,6 +6,8 @@ import shutil
 import sys
 from urllib import quote, unquote
 
+import bleach
+import markdown
 from sqlalchemy import Column, create_engine, desc, Date, func, Integer, or_, String
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
@@ -214,6 +216,8 @@ class ViewHandler(RequestHandler):
         doc = session.query(DocModel).filter(DocModel.id == document_id).one()
         session.close()
 
+        allowed_tags = bleach.ALLOWED_TAGS + ['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'pre']
+
         # Get file names
         doc_folder = os.path.join(self.__stored_docs_path, str(document_id))
         files = os.listdir(doc_folder)
@@ -221,7 +225,8 @@ class ViewHandler(RequestHandler):
         self.render(
             'view.html', region=self.__region,
             google_analytics_id=self.__google_analytics_id,
-            authorized=authorized, doc=doc, files=files
+            authorized=authorized, doc=doc, bleach=bleach, markdown=markdown,
+            allowed_tags=allowed_tags, files=files
             )
 
 

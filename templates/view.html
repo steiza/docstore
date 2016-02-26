@@ -49,7 +49,7 @@
       </tr>
       <tr>
         <td class='long'>Description</td>
-        <td>{{ doc.doc_description }}</td>
+        <td>{% raw bleach.clean(markdown.markdown(doc.doc_description), tags=allowed_tags) %}</td>
       </tr>
       <tr>
         <td>Source Organization</td>
