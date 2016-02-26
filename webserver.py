@@ -468,7 +468,14 @@ if __name__ == '__main__':
     current_directory = os.path.dirname(__file__)
     static_path = os.path.join(current_directory, 'static')
     template_path = os.path.join(current_directory, 'templates')
-    stored_docs_path = os.path.join(current_directory, 'storage', 'docs')
+
+    storage_path = os.path.join(current_directory, 'storage')
+    stored_docs_path = os.path.join(storage_path, 'docs')
+    db_path = os.path.join(storage_path, 'db')
+
+    for each_path in [storage_path, stored_docs_path, db_path]:
+        if not os.path.exists(each_path):
+            os.mkdir(each_path)
 
     engine = create_engine('sqlite:///storage/db/sqlite.db')
     Base.metadata.create_all(engine)
