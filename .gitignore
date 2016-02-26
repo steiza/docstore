@@ -1,2 +1,3 @@
 settings.yml
-storage
+storage/db/sqlite.db
+storage/docs/*/
