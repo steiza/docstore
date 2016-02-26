@@ -85,9 +85,6 @@ class AddHandler(RequestHandler):
             self.write('Request missing file upload')
             return
 
-        file_data = file_array[0]['body']
-        filename = file_array[0]['filename']
-
         # Get optional fields
         tracking_number = self.get_argument('tracking_number', default=None)
         new_doc.tracking_number = tracking_number
@@ -116,7 +113,6 @@ class AddHandler(RequestHandler):
 
         # Set metadata
         new_doc.date_uploaded = datetime.now().date()
-        new_doc.filename = filename
 
         # Save document in sqlite to get id number
         session = self.__SessionMaker()
@@ -126,14 +122,21 @@ class AddHandler(RequestHandler):
         document_id = new_doc.id
         session.close()
 
-        # Use id number to write to disk
-        file_path = os.path.join(self.__stored_docs_path, str(document_id), filename)
+        # Make the directory
+        directory = os.path.join(self.__stored_docs_path, str(document_id))
+        os.mkdir(directory)
 
-        os.mkdir(os.path.dirname(file_path))
+        # Write out the files to disk
+        for each_file in file_array:
+            file_data = each_file['body']
+            filename = each_file['filename']
 
-        fd = open(file_path, 'w')
-        fd.write(file_data)
-        fd.close()
+            # Use id number to write to disk
+            file_path = os.path.join(directory, filename)
+
+            fd = open(file_path, 'w')
+            fd.write(file_data)
+            fd.close()
 
         self.set_cookie('notification', quote('Document added; thanks!'))
         self.redirect('/')
@@ -186,12 +189,23 @@ class SearchHandler(RequestHandler):
             )
 
 
+class LegacyHandler(RequestHandler):
+
+    def get(self, document_id):
+        # Redirect with 'Moved Permanently'
+        self.set_status(301)
+        self.redirect('/view/{0}'.format(document_id))
+
+
 class ViewHandler(RequestHandler):
 
-    def initialize(self, region, google_analytics_id, SessionMaker):
+    def initialize(
+            self, region, google_analytics_id, SessionMaker, stored_docs_path):
+
         self.__region = region
         self.__google_analytics_id = google_analytics_id
         self.__SessionMaker = SessionMaker
+        self.__stored_docs_path = stored_docs_path
 
     def get(self, document_id):
         authorized = self.get_secure_cookie('authorized')
@@ -200,10 +214,14 @@ class ViewHandler(RequestHandler):
         doc = session.query(DocModel).filter(DocModel.id == document_id).one()
         session.close()
 
+        # Get file names
+        doc_folder = os.path.join(self.__stored_docs_path, str(document_id))
+        files = os.listdir(doc_folder)
+
         self.render(
             'view.html', region=self.__region,
             google_analytics_id=self.__google_analytics_id,
-            authorized=authorized, doc=doc
+            authorized=authorized, doc=doc, files=files
             )
 
 
@@ -332,7 +350,7 @@ class DeleteHandler(RequestHandler):
 
         self.set_cookie(
             'notification',
-            quote('Deleted document: {}"'.format(doc.doc_title.encode('utf8')))
+            quote('Deleted document: {}'.format(doc.doc_title.encode('utf8')))
             )
 
         self.write({'success': True})
@@ -443,7 +461,6 @@ class DocModel(Base):
     date_received = Column(Date, nullable=True)
     uploader_name = Column(String)
     uploader_email = Column(String)
-    filename = Column(String)
     date_uploaded = Column(Date)
 
 
@@ -504,10 +521,13 @@ if __name__ == '__main__':
             SessionMaker=SessionMaker
             )),
 
+        (r'/doc/([0-9]+)/', LegacyHandler),
+
         (r'/view/([0-9]+)', ViewHandler, dict(
             region=settings['region'],
             google_analytics_id=google_analytics_id,
-            SessionMaker=SessionMaker
+            SessionMaker=SessionMaker,
+            stored_docs_path=stored_docs_path
             )),
 
         (r'/file/([0-9]+)/(.*)', DownloadHandler, dict(

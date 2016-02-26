@@ -85,7 +85,11 @@
       </tr>
     </table>
     <br /><br />
-    <a href='/file/{{ url_escape(str(doc.id)) }}/{{ url_escape(doc.filename) }}'>Download this document</a>
+    {% for each_file in files %}
+      <p>
+        Download <a href='/file/{{ url_escape(str(doc.id)) }}/{{ url_escape(each_file) }}'>{{ each_file }}</a>
+      </p>
+    {% end %}
   </div>
   {% if authorized %}
     <h3>Management Area</h3>
