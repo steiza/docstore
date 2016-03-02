@@ -484,6 +484,14 @@ if __name__ == '__main__':
         if not os.path.exists(each_path):
             os.mkdir(each_path)
 
+        if not os.access(each_path, os.W_OK):
+            print ''
+            print 'Error: unable to write to {0}'.format(each_path)
+            print ''
+            print 'Please update your filesystem permissions and try again'
+            print ''
+            sys.exit(-1)
+
     engine = create_engine('sqlite:///storage/db/sqlite.db')
     Base.metadata.create_all(engine)
     SessionMaker = sessionmaker(engine)
