@@ -53,7 +53,11 @@
       </tr>
       <tr>
         <td>Source Organization</td>
-        <td>{{ doc.source_org }}</td>
+        <td>
+          <a href='/search?{{ urlencode({"query": doc.source_org, "search_field": "source_org"}) }}'>
+            {{ doc.source_org }}
+          </a>
+        </td>
       </tr>
       <tr>
         <td>Request Tracking Number</td>
@@ -85,7 +89,11 @@
       </tr>
       <tr>
         <td>Submitter Name</td>
-        <td>{{ doc.uploader_name }}</td>
+        <td>
+          <a href='/search?{{ urlencode({"query": doc.uploader_name, "search_field": "uploader_name"}) }}'>
+            {{ doc.uploader_name }}
+          </a>
+        </td>
       </tr>
     </table>
     <br /><br />

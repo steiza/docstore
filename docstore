@@ -6,7 +6,7 @@ import logging
 import os
 import shutil
 import sys
-from urllib import quote, unquote
+from urllib import quote, unquote, urlencode
 
 import bleach
 import markdown
@@ -42,7 +42,7 @@ class IndexHandler(RequestHandler):
             'index.html', region=self.__region,
             google_analytics_id=self.__google_analytics_id,
             authorized=authorized, recent_docs=recent_docs,
-            notification=notification
+            notification=notification, urlencode=urlencode
             )
 
 
@@ -158,6 +158,7 @@ class SearchHandler(RequestHandler):
 
         query_arg = self.get_argument('query', default=None)
         offset = self.get_argument('offset', default=None)
+        search_field = self.get_argument('search_field', default=None)
 
         if not offset:
             offset = 0
@@ -168,12 +169,19 @@ class SearchHandler(RequestHandler):
         query = session.query(DocModel)
 
         if query_arg:
-            query = query.filter(or_(
-                DocModel.doc_title.like('%%%s%%' % query_arg),
-                DocModel.doc_description.like('%%%s%%' % query_arg),
-                DocModel.source_org.like('%%%s%%' % query_arg),
-                DocModel.uploader_name.like('%%%s%%' % query_arg)
-                ))
+            if search_field:
+                search_attr = getattr(DocModel, search_field)
+                query = query.filter(search_attr.like('%%%s%%' % query_arg))
+
+            else:
+                # Search all fields
+                query = query.filter(or_(
+                    DocModel.doc_title.like('%%%s%%' % query_arg),
+                    DocModel.doc_description.like('%%%s%%' % query_arg),
+                    DocModel.source_org.like('%%%s%%' % query_arg),
+                    DocModel.uploader_name.like('%%%s%%' % query_arg)
+                    ))
+
         else:
             query_arg = ''
 
@@ -188,8 +196,10 @@ class SearchHandler(RequestHandler):
         self.render(
             'search.html', region=self.__region,
             google_analytics_id=self.__google_analytics_id,
-            authorized=authorized, query=query_arg, offset=offset, count=count,
-            matching_docs=matching_docs
+            authorized=authorized, query=query_arg, offset=offset,
+            search_field=search_field, count=count,
+            matching_docs=matching_docs, markdown=markdown, bleach=bleach,
+            urlencode=urlencode
             )
 
 
@@ -228,7 +238,7 @@ class ViewHandler(RequestHandler):
             'view.html', region=self.__region,
             google_analytics_id=self.__google_analytics_id,
             authorized=authorized, doc=doc, bleach=bleach, markdown=markdown,
-            allowed_tags=allowed_tags, files=files
+            allowed_tags=allowed_tags, files=files, urlencode=urlencode
             )
 
 
@@ -385,7 +395,8 @@ class OrgHandler(RequestHandler):
             'org.html', region=self.__region,
             google_analytics_id=self.__google_analytics_id,
             authorized=authorized,
-            org_results=org_results
+            org_results=org_results,
+            urlencode=urlencode
             )
 
 
@@ -412,6 +423,7 @@ class SubmitterHandler(RequestHandler):
             google_analytics_id=self.__google_analytics_id,
             authorized=authorized,
             submitter_results=submitter_results,
+            urlencode=urlencode
             )
 
 

@@ -16,7 +16,7 @@ Submitters of A2 Government Document Repository
         </thead>
         {% for each_row in submitter_results %}
         <tr>
-          <td><a href='/search?query={{ url_escape(each_row[0]) }}'>{{ escape(each_row[0]) }}<a></td>
+            <td><a href='/search?{{ urlencode({"query": each_row[0], "search_field": "uploader_name"}) }}'>{{ escape(each_row[0]) }}<a></td>
           <td class='number'>{{ escape( str(each_row[1]) ) }}</td>
         </tr>
         {% end %}

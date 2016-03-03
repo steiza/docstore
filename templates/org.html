@@ -16,7 +16,7 @@ Organizations of A2 Government Document Repository
         </thead>
         {% for each_row in org_results %}
         <tr>
-          <td><a href='/search?query={{ url_escape(each_row[0]) }}'>{{ each_row[0] }}<a></td>
+            <td><a href='/search?{{ urlencode({"query": each_row[0], "search_field": "source_org"}) }}'>{{ each_row[0] }}<a></td>
           <td class='number'>{{ str(each_row[1]) }}</td>
         </tr>
         {% end %}

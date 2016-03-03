@@ -30,9 +30,12 @@ A2 Government Document Repository
             </thead>
             {% for each_doc in recent_docs %}
                 <tr>
-                    <td><a href='/view/{{ url_escape(str(each_doc.id)) }}'>{{ each_doc.doc_title }}</a></td>
+                    <td>
+                        <a href='/view/{{ url_escape(str(each_doc.id)) }}'>{{ each_doc.doc_title }}</a>
+                    </td>
                     <td class='number'>{{ each_doc.date_uploaded.strftime('%Y-%m-%d') }}</td>
-                    <td>{{ each_doc.source_org }}</td>
+                    <td>
+                        <a href='/search?{{ urlencode({"query": each_doc.source_org, "search_field": "source_org"}) }}'>{{ each_doc.source_org }}</a></td>
                 </tr>
             {% end %}
         </table>
