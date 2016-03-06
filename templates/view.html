@@ -99,7 +99,14 @@
     <br /><br />
     {% for each_file in files %}
       <p>
-        Download <a href='/file/{{ url_escape(str(doc.id)) }}/{{ url_escape(each_file) }}'>{{ each_file }}</a>
+        Download
+        {% if each_file == filename %}
+            <span class='highlight'>
+        {% end %}
+        <a href='/file/{{ url_escape(str(doc.id)) }}/{{ url_escape(each_file) }}'>{{ each_file }}</a>
+        {% if each_file == filename %}
+            </span'>
+        {% end %}
       </p>
     {% end %}
   </div>
