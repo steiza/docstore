@@ -211,6 +211,23 @@ class LegacyHandler(RequestHandler):
         self.redirect('/view/{0}'.format(document_id))
 
 
+class LegacyFileHandler(RequestHandler):
+
+    def initialize(self, SessionMaker):
+        self.__SessionMaker = SessionMaker
+
+    def get(self, document_id, file_id):
+        session = self.__SessionMaker()
+
+        doc = session.query(LegacyFile).filter(
+            LegacyFile.doc_id == document_id).filter(
+            LegacyFile.id == file_id).one()
+
+        # Redirect with 'Moved Permanently'
+        self.set_status(301)
+        self.redirect('/view/{0}/{1}'.format(document_id, doc.filename))
+
+
 class ViewHandler(RequestHandler):
 
     def initialize(
@@ -221,7 +238,7 @@ class ViewHandler(RequestHandler):
         self.__SessionMaker = SessionMaker
         self.__stored_docs_path = stored_docs_path
 
-    def get(self, document_id):
+    def get(self, document_id, filename=None):
         authorized = self.get_secure_cookie('authorized')
 
         session = self.__SessionMaker()
@@ -237,8 +254,9 @@ class ViewHandler(RequestHandler):
         self.render(
             'view.html', region=self.__region,
             google_analytics_id=self.__google_analytics_id,
-            authorized=authorized, doc=doc, bleach=bleach, markdown=markdown,
-            allowed_tags=allowed_tags, files=files, urlencode=urlencode
+            authorized=authorized, doc=doc, filename=filename, bleach=bleach,
+            markdown=markdown, allowed_tags=allowed_tags, files=files,
+            urlencode=urlencode
             )
 
 
@@ -468,6 +486,7 @@ class AuthHandler(RequestHandler):
 
 Base = declarative_base()
 
+
 class DocModel(Base):
     __tablename__ = 'docs'
 
@@ -481,6 +500,14 @@ class DocModel(Base):
     uploader_name = Column(String)
     uploader_email = Column(String)
     date_uploaded = Column(Date)
+
+
+class LegacyFile(Base):
+    __tablename__ = 'legacy_file'
+
+    id = Column(Integer, primary_key=True)
+    doc_id = Column(Integer)
+    filename = Column(String)
 
 
 if __name__ == '__main__':
@@ -557,7 +584,18 @@ if __name__ == '__main__':
 
         (r'/doc/([0-9]+)/', LegacyHandler),
 
+        (r'/doc/([0-9]+)/view/([0-9]+)', LegacyFileHandler, dict(
+            SessionMaker=SessionMaker
+            )),
+
         (r'/view/([0-9]+)', ViewHandler, dict(
+            region=settings['region'],
+            google_analytics_id=google_analytics_id,
+            SessionMaker=SessionMaker,
+            stored_docs_path=stored_docs_path
+            )),
+
+        (r'/view/([0-9]+)/(.*)', ViewHandler, dict(
             region=settings['region'],
             google_analytics_id=google_analytics_id,
             SessionMaker=SessionMaker,

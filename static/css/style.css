@@ -90,3 +90,7 @@ td.long {
   border: 4px yellow;
   border-style: solid;
 }
+
+.highlight {
+    background-color: #ffff64;
+}
