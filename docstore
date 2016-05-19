@@ -274,8 +274,8 @@ class DownloadHandler(RequestHandler):
             self.write('File not found')
 
         self.set_header('Content-Type', 'application/octet-stream')
-        self.set_header('Content-Disposition', 'attachment; filename={0}'.format(
-            filename.encode('punycode')))
+        self.set_header('Content-Disposition', 'attachment; filename="{0}"'.format(
+            filename))
 
         fd = open(file_path, 'r')
 
