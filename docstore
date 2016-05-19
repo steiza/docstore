@@ -6,7 +6,7 @@ import logging
 import os
 import shutil
 import sys
-from urllib import quote, unquote, urlencode
+from urllib import quote, unquote, unquote_plus, urlencode
 
 import bleach
 import markdown
@@ -266,6 +266,7 @@ class DownloadHandler(RequestHandler):
         self.__stored_docs_path = stored_docs_path
 
     def get(self, doc_id, filename):
+        filename = unquote_plus(filename)
         file_path = os.path.join(self.__stored_docs_path, str(doc_id), filename)
 
         if not os.path.exists(file_path):
@@ -273,7 +274,8 @@ class DownloadHandler(RequestHandler):
             self.write('File not found')
 
         self.set_header('Content-Type', 'application/octet-stream')
-        self.set_header('Content-Disposition', 'attachment; filename={0}'.format(filename))
+        self.set_header('Content-Disposition', 'attachment; filename={0}'.format(
+            filename.encode('punycode')))
 
         fd = open(file_path, 'r')
 
