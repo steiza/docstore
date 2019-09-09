@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 import base64
-from datetime import datetime
+from datetime import datetime, time
 import logging
 import os
 import shutil
@@ -9,6 +9,8 @@ import sys
 from urllib.parse import quote, unquote, unquote_plus, urlencode
 
 import bleach
+from dateutil import tz
+from feedgen.feed import FeedGenerator
 import markdown
 from sqlalchemy import Column, create_engine, desc, Date, func, Integer, or_, String
 from sqlalchemy.ext.declarative import declarative_base
@@ -17,6 +19,9 @@ from tornado.httpserver import HTTPServer
 from tornado.ioloop import IOLoop
 from tornado.web import Application, RequestHandler, StaticFileHandler, stream_request_body
 import yaml
+
+
+BLEACH_ALLOWED_TAGS = bleach.ALLOWED_TAGS + ['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'pre']
 
 
 class IndexHandler(RequestHandler):
@@ -246,8 +251,6 @@ class ViewHandler(RequestHandler):
         doc = session.query(DocModel).filter(DocModel.id == document_id).one()
         session.close()
 
-        allowed_tags = bleach.ALLOWED_TAGS + ['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'pre']
-
         # Get file names
         doc_folder = os.path.join(self.__stored_docs_path, str(document_id))
         files = os.listdir(doc_folder)
@@ -256,7 +259,7 @@ class ViewHandler(RequestHandler):
             'view.html', region=self.__region,
             google_analytics_id=self.__google_analytics_id,
             authorized=authorized, doc=doc, filename=filename, bleach=bleach,
-            markdown=markdown, allowed_tags=allowed_tags, files=files,
+            markdown=markdown, allowed_tags=BLEACH_ALLOWED_TAGS, files=files,
             urlencode=urlencode
             )
 
@@ -487,6 +490,57 @@ class AuthHandler(RequestHandler):
                 return
 
 
+class RecentFeedHander(RequestHandler):
+
+    def initialize(self, region, SessionMaker):
+        self.__region = region
+        self.__SessionMaker = SessionMaker
+
+    @staticmethod
+    def _date_to_tzaware_datetime(the_date):
+        """
+        Given a datetime.date, returns a datetime.date time of noon at that
+        date in the local timezone.
+        """
+        return datetime.combine(
+                the_date,
+                time(12)
+            ).replace(tzinfo=tz.tzlocal())
+
+    def get(self):
+        session = self.__SessionMaker()
+        recent_docs = session.query(DocModel).order_by(desc('date_uploaded')).limit(15)
+        session.close()
+
+        site_url = '{:s}://{:s}'.format(self.request.protocol, self.request.host)
+        feed_url = '{:s}{:s}'.format(site_url, self.request.uri)
+
+        fg = FeedGenerator()
+        fg.title('{:s} Government Document Repository'
+                 .format(self.__region))
+        fg.description('Recent uploads to the {:s} Government Document Repository'
+                       .format(self.__region))
+        fg.updated(
+            RecentFeedHander._date_to_tzaware_datetime(recent_docs[0].date_uploaded))
+        fg.link(href=feed_url, rel='self')
+        fg.link(href=site_url, rel='alternate')
+
+        for doc in recent_docs:
+            fe = fg.add_entry()
+            entry_link = '{:s}/view/{:d}'.format(site_url, doc.id)
+            fe.id(entry_link)
+            fe.link(href=entry_link, rel='alternate')
+            fe.published(RecentFeedHander._date_to_tzaware_datetime(doc.date_uploaded))
+            fe.title(doc.doc_title)
+            fe.description('{:s}<br /><b>Source Organization:</b> {:s}'.format(
+                bleach.clean(markdown.markdown(doc.doc_description), tags=BLEACH_ALLOWED_TAGS),
+                doc.source_org or "-"
+            ))
+
+        self.set_header('Content-Type', 'application/rss+xml')
+        self.finish(fg.rss_str(pretty=True))
+
+
 Base = declarative_base()
 
 
@@ -546,8 +600,14 @@ if __name__ == '__main__':
         print('')
         sys.exit(-1)
 
+    # try using yaml.safe_load, in case we're using PyYAML 5.1+:
+    # https://github.com/yaml/pyyaml/wiki/PyYAML-yaml.load(input)-Deprecation
+    # if it fails, fallback to pre-5.1 yaml.load call
     with open('settings.yml', 'r') as fd:
-        settings = yaml.load(fd)
+        try:
+            settings = yaml.safe_load(fd)
+        except AttributeError:
+            settings = yaml.load(fd)
 
     google_analytics_id = settings.get('google_analytics_id', None)
     max_file_size = settings.get('max_file_size', 104857600)
@@ -570,6 +630,11 @@ if __name__ == '__main__':
         (r'/', IndexHandler, dict(
             region=settings['region'],
             google_analytics_id=google_analytics_id,
+            SessionMaker=SessionMaker
+            )),
+
+        (r'/rss/recent', RecentFeedHander, dict(
+            region=settings['region'],
             SessionMaker=SessionMaker
             )),
 
