@@ -21,6 +21,9 @@ And there's a basic password protected management page to clean up details or de
 
 Document metadata is stored in an on-disk sqlite database and the files themselves are stored on disk.
 
+Run the software
+----------------
+
 If you want to run your own version, after you check out the repository you'll need to create a basic `settings.yml` file::
 
     region: 'My City'
@@ -29,4 +32,17 @@ If you want to run your own version, after you check out the repository you'll n
     google_analytics_id: '__optional_just_remove_this_line_if_not_needed__'
     max_file_size: '__optional_maximum_upload_size_allowed__'
 
-Note that this project uses HTTP Basic auth - if you host this project without HTTPS the management password will be sent over the network in the clear.
+Then run the server:
+
+    ./docstore
+
+Note that this project uses HTTP Basic auth - if you host this project without HTTPS the management password will be sent over the network in the clear. Ideally, run this server behind a reverse proxy like nginx which performs TLS termination for you.
+
+Installing dependencies
+-----------------------
+
+Using a virtualenv:
+
+    virtualenv env
+    . env/bin/activate
+    pip install -r requirements.txt
