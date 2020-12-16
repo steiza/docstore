@@ -3,6 +3,7 @@
 import base64
 from datetime import datetime, time
 import logging
+import mimetypes
 import os
 import shutil
 import sys
@@ -277,9 +278,19 @@ class DownloadHandler(RequestHandler):
             self.set_status(404)
             self.write('File not found')
 
-        self.set_header('Content-Type', 'application/octet-stream')
-        self.set_header('Content-Disposition', 'attachment; filename="{0}"'.format(
-            filename))
+        file_extension = '.' + filename.split('.')[-1]
+
+        content_type = mimetypes.types_map.get(file_extension)
+
+        if content_type:
+            self.set_header('Content-Type', content_type)
+        else:
+            self.set_header('Content-Type', 'application/octet-stream')
+            self.set_header(
+                'Content-Disposition', 'attachment; filename="{0}"'.format(
+                    filename
+                )
+            )
 
         fd = open(file_path, 'rb')
 
