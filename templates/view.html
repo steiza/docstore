@@ -4,41 +4,6 @@
   {{ doc.doc_title }}
 {% end %}
 
-{% block head %}
-  {% if authorized %}
-    <script type='text/javascript'>
-      $(document).ready(function() {
-        function get_cookie(name) {
-          var r = document.cookie.match("\\b" + name + "=([^;]*)\\b");
-          return r ? r[1] : undefined;
-        }
-
-        $('#delete').click(function() {
-          var confirm_response = confirm('Are you sure you want to delete? There is no undo.');
-
-          data = {
-            'doc_id': {{ doc.id }},
-            '_xsrf': get_cookie('_xsrf')
-            };
-
-          if (confirm_response == true) {
-            $.ajax({
-              'type': 'POST',
-              'url': '/delete',
-              'data': data,
-              'success': function(response) {
-                if (response['success']) {
-                  window.location = '/';
-                }
-              }
-            });
-          }
-        });
-      });
-    </script>
-  {% end %}
-{% end %}
-
 {% block body %}
   <h3>Document Details</h3>
   <div class='spacer'>
@@ -105,7 +70,7 @@
         {% end %}
         <a href='/file/{{ url_escape(str(doc.id)) }}/{{ url_escape(each_file) }}'>{{ each_file }}</a>
         {% if each_file == filename %}
-            </span'>
+            </span>
         {% end %}
       </p>
     {% end %}
@@ -117,5 +82,24 @@
       <br /><br />
       <input id='delete' type='button' value='Delete Document' />
     </div>
+    <script type='text/javascript'>
+      const deleteInput = document.querySelector('input#delete');
+
+      deleteInput.addEventListener('click', async () => {
+        if (confirm('Are you sure you want to delete? There is no undo.')) {
+          ret = await fetch('/delete', {
+            method: 'POST',
+            body: JSON.stringify({'doc_id': {{ doc.id }}}),
+            headers: {'X-CSRFToken': '{{ xsrf_token }}'}
+          });
+
+          ret_json = await ret.json();
+
+          if (ret_json['success']) {
+            window.location = '/';
+          }
+        }
+      });
+    </script>
   {% end %}
 {% end %}
