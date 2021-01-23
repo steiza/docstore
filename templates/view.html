@@ -68,7 +68,7 @@
         {% if each_file == filename %}
             <span class='highlight'>
         {% end %}
-        <a href='/file/{{ url_escape(str(doc.id)) }}/{{ url_escape(each_file) }}'>{{ each_file }}</a>
+        <a href='{{ doc_root }}{{ url_escape(str(doc.id)) }}/{{ url_escape(each_file) }}'>{{ each_file }}</a>
         {% if each_file == filename %}
             </span>
         {% end %}

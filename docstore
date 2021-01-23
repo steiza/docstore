@@ -143,8 +143,9 @@ class AddHandler(RequestHandler):
             s3_client = boto3.client('s3')
 
             for each_file in file_array:
-                s3_key = 'file/{}/{}'.format(document_id, each_file['filename'])
+                s3_key = '{}/{}'.format(document_id, each_file['filename'])
                 s3_client.put_object(
+                    ACL='public-read',
                     Body=each_file['body'],
                     Bucket=self.__s3_bucket_name,
                     Key=s3_key,
@@ -258,12 +259,13 @@ class ViewHandler(RequestHandler):
 
     def initialize(
             self, region, google_analytics_id, SessionMaker, stored_docs_path,
-            s3_bucket_name=None):
+            doc_root, s3_bucket_name=None):
 
         self.__region = region
         self.__google_analytics_id = google_analytics_id
         self.__SessionMaker = SessionMaker
         self.__stored_docs_path = stored_docs_path
+        self.__doc_root = doc_root
         self.__s3_bucket_name = s3_bucket_name
 
     def get(self, document_id, filename=None):
@@ -282,7 +284,7 @@ class ViewHandler(RequestHandler):
             s3_client = boto3.client('s3')
             objects = s3_client.list_objects(
                 Bucket=self.__s3_bucket_name,
-                Prefix='file/{}/'.format(document_id),
+                Prefix='{}/'.format(document_id),
             )
 
             for each_object in objects.get('Contents', []):
@@ -297,9 +299,10 @@ class ViewHandler(RequestHandler):
             'view.html', region=self.__region,
             google_analytics_id=self.__google_analytics_id,
             authorized=authorized, doc=doc, filename=filename, bleach=bleach,
-            markdown=markdown, allowed_tags=allowed_tags, files=files,
-            urlencode=urlencode, xsrf_token=self.xsrf_token,
-            )
+            markdown=markdown, allowed_tags=allowed_tags,
+            doc_root=self.__doc_root, files=files, urlencode=urlencode,
+            xsrf_token=self.xsrf_token,
+        )
 
 
 class DownloadHandler(RequestHandler):
@@ -311,24 +314,7 @@ class DownloadHandler(RequestHandler):
     def get(self, doc_id, filename):
         filename = unquote_plus(filename)
 
-        # If S3 is configured, attempt to get file from there
-        if self.__s3_bucket_name:
-            s3_key = 'file/{}/{}'.format(doc_id, filename)
-            s3_client = boto3.client('s3')
-            objects = s3_client.list_objects(
-                Bucket=self.__s3_bucket_name,
-                Prefix=s3_key,
-            )
-
-            if objects.get('Contents'):
-                presigned_url = s3_client.generate_presigned_url(
-                    'get_object',
-                    Params={'Bucket': self.__s3_bucket_name, 'Key': s3_key},
-                )
-                self.redirect(presigned_url)
-                return
-
-        # Object was not in S3, so try on-disk
+        # Get object from on-disk
         file_path = os.path.join(self.__stored_docs_path, str(doc_id), filename)
 
         if not os.path.exists(file_path):
@@ -455,7 +441,7 @@ class DeleteHandler(RequestHandler):
             s3_client = boto3.client('s3')
             objs = s3_client.list_objects(
                 Bucket=self.__s3_bucket_name,
-                Prefix='file/{}/'.format(doc_id),
+                Prefix='{}/'.format(doc_id),
             )
 
             objects = [{'Key': each['Key']} for each in objs.get('Contents', [])]
@@ -755,6 +741,7 @@ if __name__ == '__main__':
             google_analytics_id=google_analytics_id,
             SessionMaker=SessionMaker,
             stored_docs_path=stored_docs_path,
+            doc_root=settings.get('doc_root', '/file/'),
             s3_bucket_name=settings.get('s3_bucket_name'),
             )),
 
@@ -762,7 +749,9 @@ if __name__ == '__main__':
             region=settings['region'],
             google_analytics_id=google_analytics_id,
             SessionMaker=SessionMaker,
-            stored_docs_path=stored_docs_path
+            stored_docs_path=stored_docs_path,
+            doc_root=settings.get('doc_root', '/file/'),
+            s3_bucket_name=settings.get('s3_bucket_name'),
             )),
 
         (r'/file/([0-9]+)/(.*)', DownloadHandler, dict(
