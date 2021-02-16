@@ -2,6 +2,7 @@
 
 import base64
 from datetime import datetime, time
+import json
 import logging
 import mimetypes
 import os
@@ -10,6 +11,7 @@ import sys
 from urllib.parse import quote, unquote, unquote_plus, urlencode
 
 import bleach
+import boto3
 from dateutil import tz
 from feedgen.feed import FeedGenerator
 import markdown
@@ -56,12 +58,14 @@ class IndexHandler(RequestHandler):
 class AddHandler(RequestHandler):
 
     def initialize(
-        self, region, google_analytics_id, SessionMaker, stored_docs_path):
+        self, region, google_analytics_id, SessionMaker, stored_docs_path,
+        s3_bucket_name=None):
 
         self.__region = region
         self.__google_analytics_id = google_analytics_id
         self.__SessionMaker = SessionMaker
         self.__stored_docs_path = stored_docs_path
+        self.__s3_bucket_name = s3_bucket_name
 
     def get(self):
         authorized = self.get_secure_cookie('authorized')
@@ -77,7 +81,8 @@ class AddHandler(RequestHandler):
 
         self.render(
             'add.html', region=self.__region, org_names=org_names,
-            google_analytics_id=self.__google_analytics_id, authorized=authorized
+            google_analytics_id=self.__google_analytics_id,
+            authorized=authorized
             )
 
     def post(self):
@@ -133,21 +138,36 @@ class AddHandler(RequestHandler):
         document_id = new_doc.id
         session.close()
 
-        # Make the directory
-        directory = os.path.join(self.__stored_docs_path, str(document_id))
-        os.mkdir(directory)
+        # If S3 is configured, save file there
+        if self.__s3_bucket_name:
+            s3_client = boto3.client('s3')
 
-        # Write out the files to disk
-        for each_file in file_array:
-            file_data = each_file['body']
-            filename = each_file['filename']
+            for each_file in file_array:
+                s3_key = '{}/{}'.format(document_id, each_file['filename'])
+                s3_client.put_object(
+                    ACL='public-read',
+                    Body=each_file['body'],
+                    Bucket=self.__s3_bucket_name,
+                    Key=s3_key,
+                )
 
-            # Use id number to write to disk
-            file_path = os.path.join(directory, filename)
+        # Otherwise, save to disk
+        else:
+            # Make the directory
+            directory = os.path.join(self.__stored_docs_path, str(document_id))
+            os.mkdir(directory)
 
-            fd = open(file_path, 'wb')
-            fd.write(file_data)
-            fd.close()
+            # Write out the files to disk
+            for each_file in file_array:
+                file_data = each_file['body']
+                filename = each_file['filename']
+
+                # Use id number to write to disk
+                file_path = os.path.join(directory, filename)
+
+                fd = open(file_path, 'wb')
+                fd.write(file_data)
+                fd.close()
 
         self.set_cookie('notification', quote('Document added; thanks!'))
         self.redirect('/')
@@ -238,12 +258,15 @@ class LegacyFileHandler(RequestHandler):
 class ViewHandler(RequestHandler):
 
     def initialize(
-            self, region, google_analytics_id, SessionMaker, stored_docs_path):
+            self, region, google_analytics_id, SessionMaker, stored_docs_path,
+            doc_root, s3_bucket_name=None):
 
         self.__region = region
         self.__google_analytics_id = google_analytics_id
         self.__SessionMaker = SessionMaker
         self.__stored_docs_path = stored_docs_path
+        self.__doc_root = doc_root
+        self.__s3_bucket_name = s3_bucket_name
 
     def get(self, document_id, filename=None):
         authorized = self.get_secure_cookie('authorized')
@@ -252,26 +275,46 @@ class ViewHandler(RequestHandler):
         doc = session.query(DocModel).filter(DocModel.id == document_id).one()
         session.close()
 
-        # Get file names
-        doc_folder = os.path.join(self.__stored_docs_path, str(document_id))
-        files = os.listdir(doc_folder)
+        allowed_tags = bleach.ALLOWED_TAGS + ['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'pre']
+
+        files = []
+
+        # If S3 is configured, check there first
+        if self.__s3_bucket_name:
+            s3_client = boto3.client('s3')
+            objects = s3_client.list_objects(
+                Bucket=self.__s3_bucket_name,
+                Prefix='{}/'.format(document_id),
+            )
+
+            for each_object in objects.get('Contents', []):
+                files.append(each_object['Key'].split('/')[-1])
+
+        # If we didn't find anything, check on-disk
+        if not files:
+            doc_folder = os.path.join(self.__stored_docs_path, str(document_id))
+            files.extend(os.listdir(doc_folder))
 
         self.render(
             'view.html', region=self.__region,
             google_analytics_id=self.__google_analytics_id,
             authorized=authorized, doc=doc, filename=filename, bleach=bleach,
-            markdown=markdown, allowed_tags=BLEACH_ALLOWED_TAGS, files=files,
-            urlencode=urlencode
-            )
+            markdown=markdown, allowed_tags=allowed_tags,
+            doc_root=self.__doc_root, files=files, urlencode=urlencode,
+            xsrf_token=self.xsrf_token,
+        )
 
 
 class DownloadHandler(RequestHandler):
 
-    def initialize(self, stored_docs_path):
+    def initialize(self, stored_docs_path, s3_bucket_name=None):
         self.__stored_docs_path = stored_docs_path
+        self.__s3_bucket_name = s3_bucket_name
 
     def get(self, doc_id, filename):
         filename = unquote_plus(filename)
+
+        # Get object from on-disk
         file_path = os.path.join(self.__stored_docs_path, str(doc_id), filename)
 
         if not os.path.exists(file_path):
@@ -371,9 +414,10 @@ class EditHandler(RequestHandler):
 
 class DeleteHandler(RequestHandler):
 
-    def initialize(self, SessionMaker, stored_docs_path):
+    def initialize(self, SessionMaker, stored_docs_path, s3_bucket_name):
         self.__SessionMaker = SessionMaker
         self.__stored_docs_path = stored_docs_path
+        self.__s3_bucket_name = s3_bucket_name
 
     def post(self):
         # Make sure we are authorized
@@ -384,15 +428,36 @@ class DeleteHandler(RequestHandler):
             self.write('Not authorized')
             return
 
-        doc_id = self.get_argument('doc_id', None)
+        body_dict = json.loads(self.request.body)
+        doc_id = body_dict.get('doc_id')
 
         if not doc_id:
-            self.set_stataus(401)
+            self.set_status(401)
             self.write('Bad request, no doc_id')
             return
 
-        # Remove file on disk
-        shutil.rmtree(os.path.join(self.__stored_docs_path, str(doc_id)))
+        # If S3 is configured, check if we should remove files
+        if self.__s3_bucket_name:
+            s3_client = boto3.client('s3')
+            objs = s3_client.list_objects(
+                Bucket=self.__s3_bucket_name,
+                Prefix='{}/'.format(doc_id),
+            )
+
+            objects = [{'Key': each['Key']} for each in objs.get('Contents', [])]
+            if objects:
+                s3_client.delete_objects(
+                    Bucket=self.__s3_bucket_name,
+                    Delete={'Objects': objects},
+                )
+
+        # Check if we should remove files from on-disk
+        doc_folder = os.path.join(self.__stored_docs_path, str(doc_id))
+        try:
+            os.listdir(doc_folder)
+            shutil.rmtree(doc_folder)
+        except FileNotFoundError:
+            pass
 
         # Remove metadata
         session = self.__SessionMaker()
@@ -402,7 +467,7 @@ class DeleteHandler(RequestHandler):
 
         self.set_cookie(
             'notification',
-            quote('Deleted document: {}'.format(doc.doc_title.encode('utf8')))
+            quote('Deleted document: {}'.format(doc.doc_title)),
             )
 
         self.write({'success': True})
@@ -479,6 +544,8 @@ class AuthHandler(RequestHandler):
 
         # If not, make sure basic auth is submitted
         auth_header = self.request.headers.get('Authorization')
+        if auth_header:
+            auth_header = auth_header.encode('utf8')
 
         if not auth_header:
             self.set_header('WWW-Authenticate', 'Basic realm=/auth/')
@@ -487,7 +554,7 @@ class AuthHandler(RequestHandler):
 
         else:
             # We have basic auth info; check it
-            auth_decoded = base64.decodestring(auth_header[6:])
+            auth_decoded = base64.decodestring(auth_header[6:]).decode('utf8')
             username, password = auth_decoded.split(':', 2)
 
             if password == self.__password:
@@ -653,7 +720,8 @@ if __name__ == '__main__':
             region=settings['region'],
             google_analytics_id=google_analytics_id,
             SessionMaker=SessionMaker,
-            stored_docs_path=stored_docs_path
+            stored_docs_path=stored_docs_path,
+            s3_bucket_name=settings.get('s3_bucket_name'),
             )),
 
         (r'/search', SearchHandler, dict(
@@ -672,18 +740,23 @@ if __name__ == '__main__':
             region=settings['region'],
             google_analytics_id=google_analytics_id,
             SessionMaker=SessionMaker,
-            stored_docs_path=stored_docs_path
+            stored_docs_path=stored_docs_path,
+            doc_root=settings.get('doc_root', '/file/'),
+            s3_bucket_name=settings.get('s3_bucket_name'),
             )),
 
         (r'/view/([0-9]+)/(.*)', ViewHandler, dict(
             region=settings['region'],
             google_analytics_id=google_analytics_id,
             SessionMaker=SessionMaker,
-            stored_docs_path=stored_docs_path
+            stored_docs_path=stored_docs_path,
+            doc_root=settings.get('doc_root', '/file/'),
+            s3_bucket_name=settings.get('s3_bucket_name'),
             )),
 
         (r'/file/([0-9]+)/(.*)', DownloadHandler, dict(
-            stored_docs_path=stored_docs_path
+            stored_docs_path=stored_docs_path,
+            s3_bucket_name=settings.get('s3_bucket_name'),
             )),
 
         (r'/edit/([0-9]+)', EditHandler, dict(
@@ -694,7 +767,8 @@ if __name__ == '__main__':
 
         (r'/delete', DeleteHandler, dict(
             SessionMaker=SessionMaker,
-            stored_docs_path=stored_docs_path
+            stored_docs_path=stored_docs_path,
+            s3_bucket_name=settings.get('s3_bucket_name'),
             )),
 
         (r'/orgs', OrgHandler, dict(
@@ -717,7 +791,8 @@ if __name__ == '__main__':
 
         template_path=template_path,
         cookie_secret=settings['cookie_secret'],
-        xsrf_cookies=True
+        xsrf_cookies=True,
+        debug=settings.get('debug', False),
         )
 
     server = HTTPServer(app, max_buffer_size=max_file_size)

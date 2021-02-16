@@ -3,3 +3,5 @@ password: '__make_your_own_management_password__'
 cookie_secret: '__this_can_be_anything_it_is_just_for_the_server__'
 google_analytics_id: '__optional_just_remove_this_line_if_not_needed__'
 max_file_size: 104857600
+doc_root: '/file/' # could also be 'https://cdn.example.com/'
+s3_bucket_name: 'your_s3_bucket_name'
