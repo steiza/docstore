@@ -261,7 +261,7 @@ class ViewHandler(RequestHandler):
             google_analytics_id=self.__google_analytics_id,
             authorized=authorized, doc=doc, filename=filename, bleach=bleach,
             markdown=markdown, allowed_tags=BLEACH_ALLOWED_TAGS, files=files,
-            urlencode=urlencode
+            urlencode=urlencode, xsrf_token=self.xsrf_token,
             )
 
 
@@ -487,7 +487,7 @@ class AuthHandler(RequestHandler):
 
         else:
             # We have basic auth info; check it
-            auth_decoded = base64.decodestring(auth_header[6:])
+            auth_decoded = base64.b64decode(auth_header[6:]).decode('utf8')
             username, password = auth_decoded.split(':', 2)
 
             if password == self.__password:
