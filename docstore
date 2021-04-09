@@ -56,12 +56,14 @@ class IndexHandler(RequestHandler):
 class AddHandler(RequestHandler):
 
     def initialize(
-        self, region, google_analytics_id, SessionMaker, stored_docs_path):
+        self, region, google_analytics_id, SessionMaker, stored_docs_path,
+        read_only):
 
         self.__region = region
         self.__google_analytics_id = google_analytics_id
         self.__SessionMaker = SessionMaker
         self.__stored_docs_path = stored_docs_path
+        self.__read_only = read_only
 
     def get(self):
         authorized = self.get_secure_cookie('authorized')
@@ -77,10 +79,16 @@ class AddHandler(RequestHandler):
 
         self.render(
             'add.html', region=self.__region, org_names=org_names,
-            google_analytics_id=self.__google_analytics_id, authorized=authorized
+            google_analytics_id=self.__google_analytics_id,
+            authorized=authorized, read_only=self.__read_only,
             )
 
     def post(self):
+        if self.__read_only:
+            self.set_status(400)
+            self.write('Site is in read-only mode')
+            return
+
         new_doc = DocModel()
 
         # Get required arguments
@@ -653,7 +661,8 @@ if __name__ == '__main__':
             region=settings['region'],
             google_analytics_id=google_analytics_id,
             SessionMaker=SessionMaker,
-            stored_docs_path=stored_docs_path
+            stored_docs_path=stored_docs_path,
+            read_only=settings.get('read_only', False),
             )),
 
         (r'/search', SearchHandler, dict(

@@ -5,6 +5,10 @@ Add Document
 {% end %}
 
 {% block body %}
+    {% if read_only %}
+    <h3>Site is read-only mode</h3>
+    <p>Please come back later to add a document</p>
+    {% else %}
     <h3>Add Document</h3>
     <div class='spacer'>
         <form enctype='multipart/form-data' action='' method='POST'>
@@ -70,4 +74,5 @@ Add Document
 
         $('.datepicker').datepicker();
     </script>
+    {% end %}
 {% end %}
