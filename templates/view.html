@@ -5,7 +5,7 @@
 {% end %}
 
 {% block head %}
-  {% if authorized %}
+  {% if current_user %}
     <script type='text/javascript'>
       $(document).ready(function() {
         $('#delete').click(function() {
@@ -105,7 +105,7 @@
       </p>
     {% end %}
   </div>
-  {% if authorized %}
+  {% if current_user %}
     <h3>Management Area</h3>
     <div class='spacer'>
       <a href='/edit/{{ url_escape(str(doc.id)) }}'>Edit Document</a>

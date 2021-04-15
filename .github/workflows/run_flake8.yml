@@ -1,0 +1,22 @@
+name: Run flake8 to lint python files
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'docstore'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'docstore'
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - uses: actions/setup-python@v2
+      with:
+        python-version: 3.8
+    - run: pip install flake8
+    - run: flake8 docstore

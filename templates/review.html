@@ -1,0 +1,75 @@
+{% extends 'base.html' %}
+
+{% block title %}
+Review Documents
+{% end %}
+
+{% block head %}
+  <script>
+    async function deleteDoc(docId) {
+      if (!confirm("Delete doc? There's no undo!")) {
+        return;
+      }
+
+      var formData = new FormData();
+      formData.append("doc_id", docId);
+      formData.append("_xsrf", "{{ xsrf_token }}");
+      ret = await fetch("/delete", {method: "POST", body: formData});
+      location.reload();
+    }
+
+    async function approve(docId) {
+      var formData = new FormData();
+      formData.append("doc_id", docId);
+      formData.append("_xsrf", "{{ xsrf_token }}");
+      ret = await fetch(window.location, {method: "POST", body: formData});
+      location.reload();
+    }
+  </script>
+{% end %}
+
+{% block body %}
+  {% if notification %}
+    <div class='spacer'>
+      <div class='notification'>
+        {{ notification }}
+      </div>
+    </div>
+  {% end %}
+  <h3>Review Documents</h3>
+  <div class='spacer'>
+    {% if len(docs) == 0 %}
+    <p>No docs to review</p>
+    {% else %}
+    <table class='results'>
+      <thead>
+        <tr>
+          <th>Edit</th>
+          <th>Uploaded On</th>
+          <th>Source Organization</th>
+          <th>Approve</th>
+          <th>Delete</th>
+        </tr>
+      </thead>
+      {% for each_doc in docs %}
+      <tr>
+        <td>
+          <a href='/view/{{ url_escape(str(each_doc.id)) }}'>
+            {{ each_doc.doc_title }}
+          </a>
+        </td>
+        <td>{{ each_doc.date_uploaded }}</td>
+        <td>
+          <a href='/search?{{ urlencode({"query": each_doc.source_org, "search_field": "source_org"}) }}'>
+            {{ each_doc.source_org }}
+          </a>
+        </td>
+        <!-- Make these buttons work -->
+        <td><button onclick="approve({{ each_doc.id }})">Approve</button></td>
+        <td><button onclick="deleteDoc({{ each_doc.id }})">Delete</button></td>
+      </tr>
+      {% end %}
+    </table>
+    {% end %}
+  </div>
+{% end %}

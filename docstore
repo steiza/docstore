@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import base64
+from contextlib import contextmanager
 from datetime import datetime, time
 import logging
 import mimetypes
@@ -13,78 +14,104 @@ import bleach
 from dateutil import tz
 from feedgen.feed import FeedGenerator
 import markdown
-from sqlalchemy import Column, create_engine, desc, Date, func, Integer, or_, String
+from sqlalchemy import Boolean, Column, Date, Integer, String
+from sqlalchemy import create_engine, desc, func, or_
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm.exc import NoResultFound
 from tornado.httpserver import HTTPServer
 from tornado.ioloop import IOLoop
-from tornado.web import Application, RequestHandler, StaticFileHandler, stream_request_body
+from tornado.web import Application, RequestHandler, StaticFileHandler
+from tornado.web import authenticated
 import yaml
 
 
-BLEACH_ALLOWED_TAGS = bleach.ALLOWED_TAGS + ['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'pre']
+BLEACH_ALLOWED_TAGS = bleach.ALLOWED_TAGS + [
+    'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'pre'
+]
 
 
-class IndexHandler(RequestHandler):
+class BaseHandler(RequestHandler):
 
-    def initialize(self, region, google_analytics_id, SessionMaker):
-        self.__region = region
-        self.__google_analytics_id = google_analytics_id
-        self.__SessionMaker = SessionMaker
+    def initialize(
+        self, SessionMaker=None, google_analytics_id=None, password=None,
+        read_only=None, region=None, stored_docs_path=None,
+    ):
+        self._SessionMaker = SessionMaker
+        self._google_analytics_id = google_analytics_id
+        self._password = password
+        self._read_only = read_only
+        self._region = region
+        self._stored_docs_path = stored_docs_path
 
-    def get(self):
-        authorized = self.get_secure_cookie('authorized')
+    def get_current_user(self):
+        cookie = self.get_secure_cookie('authorized')
 
-        session = self.__SessionMaker()
-        recent_docs = session.query(DocModel).order_by(desc('date_uploaded')).limit(10)
-        session.close()
+        if cookie is not None:
+            cookie = cookie.decode('utf8')
 
+        return cookie
+
+    def get_notification(self):
         notification = self.get_cookie('notification')
 
-        if notification:
+        if notification is not None:
             notification = unquote(notification)
             self.clear_cookie('notification')
 
+        return notification
+
+    @contextmanager
+    def _context_session(self):
+        session = self._SessionMaker()
+
+        try:
+            yield session
+            session.commit()
+
+        except Exception:
+            session.rollback()
+            raise
+
+        finally:
+            session.close()
+
+
+class IndexHandler(BaseHandler):
+
+    def get(self):
+        with self._context_session() as session:
+            recent_docs = session.query(DocModel).filter_by(
+                approved=True).order_by(desc('date_uploaded')).limit(10)
+
+        notification = self.get_notification()
+
         self.render(
-            'index.html', region=self.__region,
-            google_analytics_id=self.__google_analytics_id,
-            authorized=authorized, recent_docs=recent_docs,
-            notification=notification, urlencode=urlencode
+            'index.html', region=self._region,
+            google_analytics_id=self._google_analytics_id,
+            recent_docs=recent_docs, notification=notification,
+            urlencode=urlencode
             )
 
 
-class AddHandler(RequestHandler):
-
-    def initialize(
-        self, region, google_analytics_id, SessionMaker, stored_docs_path,
-        read_only):
-
-        self.__region = region
-        self.__google_analytics_id = google_analytics_id
-        self.__SessionMaker = SessionMaker
-        self.__stored_docs_path = stored_docs_path
-        self.__read_only = read_only
+class AddHandler(BaseHandler):
 
     def get(self):
-        authorized = self.get_secure_cookie('authorized')
-
-        session = self.__SessionMaker()
-
-        org_results = session.query(DocModel.source_org).group_by(
-                DocModel.source_org).order_by(DocModel.source_org).all()
+        with self._context_session() as session:
+            org_results = session.query(DocModel.source_org).filter_by(
+                    approved=True).group_by(DocModel.source_org).order_by(
+                    DocModel.source_org).all()
 
         org_names = [each[0] for each in org_results]
 
-        session.close()
-
         self.render(
-            'add.html', region=self.__region, org_names=org_names,
-            google_analytics_id=self.__google_analytics_id,
-            authorized=authorized, read_only=self.__read_only,
+            'add.html', region=self._region, org_names=org_names,
+            google_analytics_id=self._google_analytics_id,
+            read_only=self._read_only,
             )
 
     def post(self):
-        if self.__read_only:
+        if self._read_only:
             self.set_status(400)
             self.write('Site is in read-only mode')
             return
@@ -110,7 +137,8 @@ class AddHandler(RequestHandler):
 
         date_requested = self.get_argument('date_requested', default=None)
         if date_requested:
-            date_requested = datetime.strptime(date_requested, '%m/%d/%Y').date()
+            date_requested = datetime.strptime(
+                date_requested, '%m/%d/%Y').date()
         else:
             date_requested = None
 
@@ -132,17 +160,16 @@ class AddHandler(RequestHandler):
 
         # Set metadata
         new_doc.date_uploaded = datetime.now().date()
+        new_doc.approved = False
 
         # Save document in sqlite to get id number
-        session = self.__SessionMaker()
-        session.add(new_doc)
-        session.commit()
-
-        document_id = new_doc.id
-        session.close()
+        with self._context_session() as session:
+            session.add(new_doc)
+            session.commit()
+            document_id = new_doc.id
 
         # Make the directory
-        directory = os.path.join(self.__stored_docs_path, str(document_id))
+        directory = os.path.join(self._stored_docs_path, str(document_id))
         os.mkdir(directory)
 
         # Write out the files to disk
@@ -157,20 +184,17 @@ class AddHandler(RequestHandler):
             fd.write(file_data)
             fd.close()
 
-        self.set_cookie('notification', quote('Document added; thanks!'))
+        self.set_cookie(
+            'notification',
+            quote('Document submitted for review; thanks!')
+        )
+
         self.redirect('/')
 
 
-class SearchHandler(RequestHandler):
-
-    def initialize(self, region, google_analytics_id, SessionMaker):
-        self.__region = region
-        self.__google_analytics_id = google_analytics_id
-        self.__SessionMaker = SessionMaker
+class SearchHandler(BaseHandler):
 
     def get(self):
-        authorized = self.get_secure_cookie('authorized')
-
         query_arg = self.get_argument('query', default=None)
         offset = self.get_argument('offset', default=None)
         search_field = self.get_argument('search_field', default=None)
@@ -180,45 +204,44 @@ class SearchHandler(RequestHandler):
         else:
             offset = int(offset)
 
-        session = self.__SessionMaker()
-        query = session.query(DocModel)
+        with self._context_session() as session:
+            query = session.query(DocModel).filter_by(approved=True)
 
-        if query_arg:
-            if search_field:
-                search_attr = getattr(DocModel, search_field)
-                query = query.filter(search_attr.like('%%%s%%' % query_arg))
+            if query_arg:
+                if search_field:
+                    search_attr = getattr(DocModel, search_field)
+                    query = query.filter(
+                        search_attr.like('%%%s%%' % query_arg)
+                    )
+
+                else:
+                    # Search all fields
+                    query = query.filter(or_(
+                        DocModel.doc_title.like('%%%s%%' % query_arg),
+                        DocModel.doc_description.like('%%%s%%' % query_arg),
+                        DocModel.source_org.like('%%%s%%' % query_arg),
+                        DocModel.uploader_name.like('%%%s%%' % query_arg)
+                        ))
 
             else:
-                # Search all fields
-                query = query.filter(or_(
-                    DocModel.doc_title.like('%%%s%%' % query_arg),
-                    DocModel.doc_description.like('%%%s%%' % query_arg),
-                    DocModel.source_org.like('%%%s%%' % query_arg),
-                    DocModel.uploader_name.like('%%%s%%' % query_arg)
-                    ))
+                query_arg = ''
 
-        else:
-            query_arg = ''
+            query = query.order_by(desc(DocModel.date_uploaded))
 
-        query = query.order_by(desc(DocModel.date_uploaded))
+            count = query.count()
 
-        count = query.count()
+            matching_docs = query.offset(offset).limit(20).all()
 
-        matching_docs = query.offset(offset).limit(20).all()
-
-        session.close()
-
-        self.render(
-            'search.html', region=self.__region,
-            google_analytics_id=self.__google_analytics_id,
-            authorized=authorized, query=query_arg, offset=offset,
-            search_field=search_field, count=count,
-            matching_docs=matching_docs, markdown=markdown, bleach=bleach,
-            urlencode=urlencode
-            )
+            self.render(
+                'search.html', region=self._region,
+                google_analytics_id=self._google_analytics_id, query=query_arg,
+                offset=offset, search_field=search_field, count=count,
+                matching_docs=matching_docs, markdown=markdown, bleach=bleach,
+                urlencode=urlencode
+                )
 
 
-class LegacyHandler(RequestHandler):
+class LegacyHandler(BaseHandler):
 
     def get(self, document_id):
         # Redirect with 'Moved Permanently'
@@ -226,65 +249,76 @@ class LegacyHandler(RequestHandler):
         self.redirect('/view/{0}'.format(document_id))
 
 
-class LegacyFileHandler(RequestHandler):
-
-    def initialize(self, SessionMaker):
-        self.__SessionMaker = SessionMaker
+class LegacyFileHandler(BaseHandler):
 
     def get(self, document_id, file_id):
-        session = self.__SessionMaker()
-
-        doc = session.query(LegacyFile).filter(
-            LegacyFile.doc_id == document_id).filter(
-            LegacyFile.id == file_id).one()
+        with self._context_session() as session:
+            doc = session.query(LegacyFile).filter_by(
+                doc_id=document_id, id=file_id).one()
 
         # Redirect with 'Moved Permanently'
         self.set_status(301)
         self.redirect('/view/{0}/{1}'.format(document_id, doc.filename))
 
 
-class ViewHandler(RequestHandler):
-
-    def initialize(
-            self, region, google_analytics_id, SessionMaker, stored_docs_path):
-
-        self.__region = region
-        self.__google_analytics_id = google_analytics_id
-        self.__SessionMaker = SessionMaker
-        self.__stored_docs_path = stored_docs_path
+class ViewHandler(BaseHandler):
 
     def get(self, document_id, filename=None):
-        authorized = self.get_secure_cookie('authorized')
+        with self._context_session() as session:
+            query = session.query(DocModel).filter_by(id=document_id)
 
-        session = self.__SessionMaker()
-        doc = session.query(DocModel).filter(DocModel.id == document_id).one()
-        session.close()
+            # If we aren't an admin, see if this doc has been approved
+            if not self.current_user:
+                query = query.filter_by(approved=True)
 
-        # Get file names
-        doc_folder = os.path.join(self.__stored_docs_path, str(document_id))
-        files = os.listdir(doc_folder)
+            try:
+                doc = query.one()
 
-        self.render(
-            'view.html', region=self.__region,
-            google_analytics_id=self.__google_analytics_id,
-            authorized=authorized, doc=doc, filename=filename, bleach=bleach,
-            markdown=markdown, allowed_tags=BLEACH_ALLOWED_TAGS, files=files,
-            urlencode=urlencode, xsrf_token=self.xsrf_token,
-            )
+                # Get file names
+                doc_folder = os.path.join(
+                    self._stored_docs_path, str(document_id)
+                )
+                files = os.listdir(doc_folder)
+
+            except (NoResultFound, FileNotFoundError):
+                self.set_status(404)
+                self.write('File not found')
+                return
+
+            self.render(
+                'view.html', region=self._region,
+                google_analytics_id=self._google_analytics_id, doc=doc,
+                filename=filename, bleach=bleach, markdown=markdown,
+                allowed_tags=BLEACH_ALLOWED_TAGS, files=files,
+                urlencode=urlencode, xsrf_token=self.xsrf_token,
+                )
 
 
-class DownloadHandler(RequestHandler):
-
-    def initialize(self, stored_docs_path):
-        self.__stored_docs_path = stored_docs_path
+class DownloadHandler(BaseHandler):
 
     def get(self, doc_id, filename):
+        # If we aren't an admin, see if this doc has been approved
+        if not self.current_user:
+            with self._context_session() as session:
+                try:
+                    doc = session.query(DocModel).filter_by(id=doc_id).one()
+                    approved = doc.approved
+                except NoResultFound:
+                    approved = False
+
+                if not approved:
+                    self.set_status(404)
+                    self.write('File not found')
+                    return
+
         filename = unquote_plus(filename)
-        file_path = os.path.join(self.__stored_docs_path, str(doc_id), filename)
+        file_path = os.path.join(
+            self._stored_docs_path, str(doc_id), filename)
 
         if not os.path.exists(file_path):
             self.set_status(404)
             self.write('File not found')
+            return
 
         file_extension = '.' + filename.split('.')[-1]
 
@@ -313,85 +347,99 @@ class DownloadHandler(RequestHandler):
                 break
 
 
-class EditHandler(RequestHandler):
+class ReviewHandler(BaseHandler):
 
-    def initialize(self, region, google_analytics_id, SessionMaker):
-        self.__region = region
-        self.__google_analytics_id = google_analytics_id
-        self.__SessionMaker = SessionMaker
+    @authenticated
+    def get(self):
+        with self._context_session() as session:
+            docs = session.query(DocModel).filter_by(approved=False).limit(
+                10).all()
 
-    def get(self, doc_id):
-        authorized = self.get_secure_cookie('authorized')
+            notification = self.get_notification()
 
-        if not authorized:
-            self.set_status(400)
-            self.write('Not authorized')
-            return
-
-        session = self.__SessionMaker()
-
-        doc = session.query(DocModel).filter(DocModel.id == doc_id).one()
-
-        org_results = session.query(DocModel.source_org).group_by(
-                DocModel.source_org).order_by(DocModel.source_org).all()
-
-        org_names = [each[0] for each in org_results]
-
-        session.close()
-
-        # Make sure dates are in the form understood by JavaScript
-        if doc.date_requested:
-            doc.date_requested = doc.date_requested.strftime('%m/%d/%Y')
-
-        if doc.date_received:
-            doc.date_received = doc.date_received.strftime('%m/%d/%Y')
-
-        self.render(
-            'edit.html', region=self.__region, org_names=org_names,
-            google_analytics_id=self.__google_analytics_id,
-            authorized=authorized, doc=doc
+            self.render(
+                'review.html', google_analytics_id=self._google_analytics_id,
+                region=self._region, docs=docs, notification=notification,
+                urlencode=urlencode, xsrf_token=self.xsrf_token,
             )
 
+    @authenticated
+    def post(self):
+        doc_id = self.get_argument('doc_id', None)
+
+        if not doc_id:
+            self.set_stataus(401)
+            self.write('Bad request, no doc_id')
+            return
+
+        with self._context_session() as session:
+            doc = session.query(DocModel).filter_by(id=doc_id).one()
+            doc.approved = True
+            session.add(doc)
+
+            self.set_cookie(
+                'notification',
+                quote('Approved document: {}'.format(doc.doc_title))
+            )
+
+        self.write({'success': True})
+
+
+class EditHandler(BaseHandler):
+
+    @authenticated
+    def get(self, doc_id):
+        with self._context_session() as session:
+            doc = session.query(DocModel).filter_by(id=doc_id).one()
+
+            org_results = session.query(DocModel.source_org).group_by(
+                    DocModel.source_org).order_by(DocModel.source_org).all()
+
+            org_names = [each[0] for each in org_results]
+
+            # Make sure dates are in the form understood by JavaScript
+            if doc.date_requested:
+                doc.date_requested = doc.date_requested.strftime('%m/%d/%Y')
+
+            if doc.date_received:
+                doc.date_received = doc.date_received.strftime('%m/%d/%Y')
+
+            self.render(
+                'edit.html', region=self._region, org_names=org_names,
+                google_analytics_id=self._google_analytics_id, doc=doc
+            )
+
+    @authenticated
     def post(self, doc_id):
-        session = self.__SessionMaker()
-        doc = session.query(DocModel).filter(DocModel.id == doc_id).one()
+        with self._context_session() as session:
+            doc = session.query(DocModel).filter_by(id=doc_id).one()
 
-        for each_property in ['doc_title', 'doc_description', 'source_org',
-            'tracking_number', 'date_requested', 'date_received',
-            'uploader_name', 'uploader_email']:
+            for each_property in [
+                'doc_title', 'doc_description', 'source_org',
+                'tracking_number', 'date_requested', 'date_received',
+                'uploader_name', 'uploader_email',
+            ]:
 
-            value = self.get_argument(each_property)
+                value = self.get_argument(each_property)
 
-            if each_property.startswith('date_'):
-                if value:
-                    value = datetime.strptime(value, '%m/%d/%Y').date()
-                else:
-                    value = None
+                if each_property.startswith('date_'):
+                    if value:
+                        value = datetime.strptime(value, '%m/%d/%Y').date()
+                    else:
+                        value = None
 
-            setattr(doc, each_property, value)
+                setattr(doc, each_property, value)
 
-        session.add(doc)
-        session.commit()
+            session.add(doc)
 
         self.set_cookie('notification', quote('Document updated; thanks!'))
         self.redirect('/')
 
 
-class DeleteHandler(RequestHandler):
+class DeleteHandler(BaseHandler):
 
-    def initialize(self, SessionMaker, stored_docs_path):
-        self.__SessionMaker = SessionMaker
-        self.__stored_docs_path = stored_docs_path
-
+    @authenticated
     def post(self):
-        # Make sure we are authorized
-        authorized = self.get_secure_cookie('authorized')
-
-        if not authorized:
-            self.set_status(400)
-            self.write('Not authorized')
-            return
-
         doc_id = self.get_argument('doc_id', None)
 
         if not doc_id:
@@ -400,80 +448,56 @@ class DeleteHandler(RequestHandler):
             return
 
         # Remove file on disk
-        shutil.rmtree(os.path.join(self.__stored_docs_path, str(doc_id)))
+        shutil.rmtree(os.path.join(self._stored_docs_path, str(doc_id)))
 
         # Remove metadata
-        session = self.__SessionMaker()
-        doc = session.query(DocModel).filter(DocModel.id == doc_id).one()
-        session.delete(doc)
-        session.commit()
+        with self._context_session() as session:
+            doc = session.query(DocModel).filter_by(id=doc_id).one()
+            session.delete(doc)
 
         self.set_cookie(
             'notification',
-            quote('Deleted document: {}'.format(doc.doc_title.encode('utf8')))
-            )
+            quote('Deleted document: {}'.format(doc.doc_title))
+        )
 
         self.write({'success': True})
 
 
-class OrgHandler(RequestHandler):
-
-    def initialize(self, region, google_analytics_id, SessionMaker):
-        self.__region = region
-        self.__google_analytics_id = google_analytics_id
-        self.__SessionMaker = SessionMaker
+class OrgHandler(BaseHandler):
 
     def get(self):
-        authorized = self.get_secure_cookie('authorized')
-
-        session = self.__SessionMaker()
-
-        org_results = session.query(
-            DocModel.source_org, func.count(DocModel.source_org)).group_by(
+        with self._context_session() as session:
+            org_results = session.query(
+                DocModel.source_org, func.count(DocModel.source_org)
+                ).filter_by(approved=True).group_by(
                 DocModel.source_org).order_by(DocModel.source_org).all()
 
-        session.close()
-
-        self.render(
-            'org.html', region=self.__region,
-            google_analytics_id=self.__google_analytics_id,
-            authorized=authorized,
-            org_results=org_results,
-            urlencode=urlencode
-            )
+            self.render(
+                'org.html', region=self._region,
+                google_analytics_id=self._google_analytics_id,
+                org_results=org_results, urlencode=urlencode
+                )
 
 
-class SubmitterHandler(RequestHandler):
-
-    def initialize(self, region, google_analytics_id, SessionMaker):
-        self.__region = region
-        self.__google_analytics_id = google_analytics_id
-        self.__SessionMaker = SessionMaker
+class SubmitterHandler(BaseHandler):
 
     def get(self):
-        authorized = self.get_secure_cookie('authorized')
+        with self._context_session() as session:
+            count = func.count(DocModel.uploader_name)
 
-        session = self.__SessionMaker()
+            submitter_results = session.query(
+                DocModel.uploader_name, count).filter_by(
+                approved=True).group_by(DocModel.uploader_name).order_by(
+                DocModel.uploader_name).all()
 
-        submitter_results = session.query(
-            DocModel.uploader_name, func.count(DocModel.uploader_name)).group_by(
-                DocModel.uploader_name).order_by(DocModel.uploader_name).all()
-
-        session.close()
-
-        self.render(
-            'submitter.html', region=self.__region,
-            google_analytics_id=self.__google_analytics_id,
-            authorized=authorized,
-            submitter_results=submitter_results,
-            urlencode=urlencode
-            )
+            self.render(
+                'submitter.html', region=self._region,
+                google_analytics_id=self._google_analytics_id,
+                submitter_results=submitter_results, urlencode=urlencode
+                )
 
 
-class AuthHandler(RequestHandler):
-
-    def initialize(self, password):
-        self.__password = password
+class AuthHandler(BaseHandler):
 
     def get(self):
         # First, check if this is a log out request
@@ -498,9 +522,11 @@ class AuthHandler(RequestHandler):
             auth_decoded = base64.b64decode(auth_header[6:]).decode('utf8')
             username, password = auth_decoded.split(':', 2)
 
-            if password == self.__password:
+            if password == self._password:
                 self.set_secure_cookie('authorized', 'true')
-                self.set_cookie('notification', quote('You have signed in succesfully!'))
+                self.set_cookie(
+                    'notification', quote('You have signed in succesfully!')
+                )
                 self.redirect('/')
 
             else:
@@ -509,11 +535,7 @@ class AuthHandler(RequestHandler):
                 return
 
 
-class RecentFeedHander(RequestHandler):
-
-    def initialize(self, region, SessionMaker):
-        self.__region = region
-        self.__SessionMaker = SessionMaker
+class RecentFeedHander(BaseHandler):
 
     @staticmethod
     def _date_to_tzaware_datetime(the_date):
@@ -527,37 +549,50 @@ class RecentFeedHander(RequestHandler):
             ).replace(tzinfo=tz.tzlocal())
 
     def get(self):
-        session = self.__SessionMaker()
-        recent_docs = session.query(DocModel).order_by(desc('date_uploaded')).limit(15)
-        session.close()
+        with self._context_session() as session:
+            recent_docs = session.query(DocModel).filter_by(
+                approved=True).order_by(desc('date_uploaded')).limit(15)
 
-        site_url = '{:s}://{:s}'.format(self.request.protocol, self.request.host)
-        feed_url = '{:s}{:s}'.format(site_url, self.request.uri)
+            site_url = '{:s}://{:s}'.format(
+                self.request.protocol, self.request.host
+            )
+            feed_url = '{:s}{:s}'.format(site_url, self.request.uri)
 
-        fg = FeedGenerator()
-        fg.title('{:s} Government Document Repository'
-                 .format(self.__region))
-        fg.description('Recent uploads to the {:s} Government Document Repository'
-                       .format(self.__region))
-        fg.updated(
-            RecentFeedHander._date_to_tzaware_datetime(recent_docs[0].date_uploaded))
-        fg.link(href=feed_url, rel='self')
-        fg.link(href=site_url, rel='alternate')
+            fg = FeedGenerator()
+            fg.title('{:s} Civic Document Repository'.format(self._region))
+            fg.description(
+                'Recent uploads to the {:s} Civic Document Repository'
+                .format(self._region)
+            )
+            fg.updated(
+                RecentFeedHander._date_to_tzaware_datetime(
+                    recent_docs[0].date_uploaded
+                )
+            )
+            fg.link(href=feed_url, rel='self')
+            fg.link(href=site_url, rel='alternate')
 
-        for doc in recent_docs:
-            fe = fg.add_entry()
-            entry_link = '{:s}/view/{:d}'.format(site_url, doc.id)
-            fe.id(entry_link)
-            fe.link(href=entry_link, rel='alternate')
-            fe.published(RecentFeedHander._date_to_tzaware_datetime(doc.date_uploaded))
-            fe.title(doc.doc_title)
-            fe.description('{:s}<br /><b>Source Organization:</b> {:s}'.format(
-                bleach.clean(markdown.markdown(doc.doc_description), tags=BLEACH_ALLOWED_TAGS),
-                doc.source_org or "-"
-            ))
+            for doc in recent_docs:
+                fe = fg.add_entry()
+                entry_link = '{:s}/view/{:d}'.format(site_url, doc.id)
+                fe.id(entry_link)
+                fe.link(href=entry_link, rel='alternate')
+                fe.published(RecentFeedHander._date_to_tzaware_datetime(
+                    doc.date_uploaded
+                ))
+                fe.title(doc.doc_title)
+                fe.description(
+                    '{:s}<br /><b>Source Organization:</b> {:s}'.format(
+                        bleach.clean(
+                            markdown.markdown(doc.doc_description),
+                            tags=BLEACH_ALLOWED_TAGS
+                        ),
+                        doc.source_org or "-"
+                    )
+                )
 
-        self.set_header('Content-Type', 'application/rss+xml')
-        self.finish(fg.rss_str(pretty=True))
+            self.set_header('Content-Type', 'application/rss+xml')
+            self.finish(fg.rss_str(pretty=True))
 
 
 Base = declarative_base()
@@ -576,6 +611,7 @@ class DocModel(Base):
     uploader_name = Column(String)
     uploader_email = Column(String)
     date_uploaded = Column(Date)
+    approved = Column(Boolean, default=True)
 
 
 class LegacyFile(Base):
@@ -692,7 +728,14 @@ if __name__ == '__main__':
             )),
 
         (r'/file/([0-9]+)/(.*)', DownloadHandler, dict(
+            SessionMaker=SessionMaker,
             stored_docs_path=stored_docs_path
+            )),
+
+        (r'/review', ReviewHandler, dict(
+            region=settings['region'],
+            google_analytics_id=google_analytics_id,
+            SessionMaker=SessionMaker
             )),
 
         (r'/edit/([0-9]+)', EditHandler, dict(
@@ -724,8 +767,10 @@ if __name__ == '__main__':
 
         ],
 
-        template_path=template_path,
         cookie_secret=settings['cookie_secret'],
+        debug=settings.get('debug', False),
+        serve_traceback=False,
+        template_path=template_path,
         xsrf_cookies=True
         )
 

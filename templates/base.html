@@ -33,9 +33,11 @@
       <li><a href='/orgs'>View by Organization</a></li>
       <li><a href='/submitters'>View by Submitter</a></li>
       <ul class='right_nav'>
-      {% if authorized %}
+      {% if current_user %}
           <li><a href='/auth/?log_out=true'>Log Out</a></li>
+          <li><a href='/review'>Review</a></li>
       {% else %}
+          <li>&nbsp;</li>
           <li>&nbsp;</li>
       {% end %}
       </ul>
