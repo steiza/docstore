@@ -64,9 +64,8 @@ Review Documents
             {{ each_doc.source_org }}
           </a>
         </td>
-        <!-- Make these buttons work -->
-        <td><button onclick="approve({{ each_doc.id }})">Approve</button></td>
-        <td><button onclick="deleteDoc({{ each_doc.id }})">Delete</button></td>
+        <td><button class="approve" onclick="approve({{ each_doc.id }})">Approve</button></td>
+        <td><button class="remove" onclick="deleteDoc({{ each_doc.id }})">Delete</button></td>
       </tr>
       {% end %}
     </table>

@@ -1,0 +1,27 @@
+name: Run integration tests
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'docstore'
+      - 'tests/**'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'docstore'
+      - 'tests/**'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - uses: actions/setup-python@v2
+      with:
+        python-version: 3.8
+    - run: pip install -r requirements.txt
+    - run: pip install -r test-requirements.txt
+    - run: "printf 'region: My City\npassword: testpassword\ncookie_secret: testcookiesecret\n' > settings.yml"
+    - run: "python docstore &"
+    - run: python -m unittest tests/*.py

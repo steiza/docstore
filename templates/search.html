@@ -14,11 +14,11 @@ Search {{ region }} Civic Document Repository
     <div class='spacer'>
       <form action='' method='GET'>
         {% if query %}
-          <input type='text' name='query' value="{{ query }}">
+          <input type='text' id='query' name='query' value="{{ query }}">
         {% else %}
-          <input type='text' name='query'>
+          <input type='text' id='query' name='query'>
         {% end %}
-        <input type='submit' value='Search'>
+        <input type='submit' id='search' value='Search'>
         <select name='search_field' id='search_field' data-placeholder='Search specific field...' class='chosen-select'>
             <option value='' />
             <option value='doc_title'>Document title</option>

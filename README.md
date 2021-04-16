@@ -2,6 +2,8 @@
 
 [![flake8 linting](https://github.com/steiza/docstore/actions/workflows/run_flake8.yml/badge.svg)](https://github.com/steiza/docstore/actions/workflows/run_flake8.yml)
 
+[![integration tests](https://github.com/steiza/docstore/actions/workflows/integration_tests.yml/badge.svg)](https://github.com/steiza/docstore/actions/workflows/integration_tests.yml)
+
 This project is meant for any civics-minded organization that needs a simple place to host documents publicly.
 
 On the homepage you can see recently uploaded documents:
