@@ -6,30 +6,30 @@
 
 {% block head %}
   {% if current_user %}
-    <script type='text/javascript'>
-      $(document).ready(function() {
-        $('#delete').click(function() {
-          var confirm_response = confirm('Are you sure you want to delete? There is no undo.');
+    <script>
+      async function deleteDoc() {
+        if (!confirm("Delete doc? There's no undo!")) {
+          return;
+        }
 
-          data = {
-            'doc_id': {{ doc.id }},
-            '_xsrf': '{{ xsrf_token }}',
-          };
+        var formData = new FormData();
+        formData.append("doc_id", {{ doc.id}});
+        formData.append("_xsrf", "{{ xsrf_token }}");
+        ret = await fetch("/delete", {method: "POST", body: formData});
+        if (ret['ok']) {
+          window.location = '/';
+        }
+      }
 
-          if (confirm_response == true) {
-            $.ajax({
-              'type': 'POST',
-              'url': '/delete',
-              'data': data,
-              'success': function(response) {
-                if (response['success']) {
-                  window.location = '/';
-                }
-              }
-            });
-          }
-        });
-      });
+      async function approveDoc() {
+        var formData = new FormData();
+        formData.append("doc_id", {{ doc.id}});
+        formData.append("_xsrf", "{{ xsrf_token }}");
+        ret = await fetch("/review", {method: "POST", body: formData});
+        if (ret['ok']) {
+          window.location = '/';
+        }
+      }
     </script>
   {% end %}
 {% end %}
@@ -110,7 +110,10 @@
     <div class='spacer'>
       <a href='/edit/{{ url_escape(str(doc.id)) }}'>Edit Document</a>
       <br /><br />
-      <input id='delete' type='button' value='Delete Document' />
+      {% if not doc.approved %}
+      <button onclick="approveDoc()">Approve</button>
+      {% end %}
+      <button id="delete" onclick="deleteDoc()">Delete</button>
     </div>
   {% end %}
 {% end %}

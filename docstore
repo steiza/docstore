@@ -10,6 +10,7 @@ import shutil
 import sys
 from urllib.parse import quote, unquote, unquote_plus, urlencode
 
+import boto3
 import bleach
 from dateutil import tz
 from feedgen.feed import FeedGenerator
@@ -35,7 +36,8 @@ class BaseHandler(RequestHandler):
 
     def initialize(
         self, SessionMaker=None, google_analytics_id=None, password=None,
-        read_only=None, region=None, stored_docs_path=None,
+        read_only=None, region=None, stored_docs_path=None, admin_emails=None,
+        from_email=None, app_root=None,
     ):
         self._SessionMaker = SessionMaker
         self._google_analytics_id = google_analytics_id
@@ -43,6 +45,9 @@ class BaseHandler(RequestHandler):
         self._read_only = read_only
         self._region = region
         self._stored_docs_path = stored_docs_path
+        self._admin_emails = admin_emails
+        self._from_email = from_email
+        self._app_root = app_root
 
     def get_current_user(self):
         cookie = self.get_secure_cookie('authorized')
@@ -60,6 +65,18 @@ class BaseHandler(RequestHandler):
             self.clear_cookie('notification')
 
         return notification
+
+    def send_admin_email(self, email_subject, email_text):
+        if self._admin_emails and self._from_email:
+            ses_client = boto3.client('ses')
+            ses_client.send_email(
+                Source=self._from_email,
+                Destination={'ToAddresses': self._admin_emails},
+                Message={
+                    'Subject': {'Data': email_subject},
+                    'Body': {'Text': {'Data': email_text}},
+                },
+            )
 
     @contextmanager
     def _context_session(self):
@@ -168,6 +185,26 @@ class AddHandler(BaseHandler):
             session.commit()
             document_id = new_doc.id
 
+            email_subject = 'Doc to review: {}'.format(document_id)
+
+            email_text = (
+                'A new document was submitted and needs review\n\n'
+                'Title: {}\n'
+                'Description: {}\n'
+                'Source Org: {}\n'
+                'Uploader Name: {}\n'
+                'Uploader Email: {}\n'
+            ).format(
+                new_doc.doc_title, new_doc.doc_description, new_doc.source_org,
+                new_doc.uploader_name, new_doc.uploader_email
+            )
+
+            if self._app_root:
+                email_text += (
+                    '\nView this doc at {}/view/{}\n'
+                    'Or all docs to review at {}/review\n'
+                ).format(self._app_root, new_doc.id, self._app_root)
+
         # Make the directory
         directory = os.path.join(self._stored_docs_path, str(document_id))
         os.mkdir(directory)
@@ -183,6 +220,9 @@ class AddHandler(BaseHandler):
             fd = open(file_path, 'wb')
             fd.write(file_data)
             fd.close()
+
+        # Notify admins
+        self.send_admin_email(email_subject, email_text)
 
         self.set_cookie(
             'notification',
@@ -382,6 +422,10 @@ class ReviewHandler(BaseHandler):
                 quote('Approved document: {}'.format(doc.doc_title))
             )
 
+        self.send_admin_email(
+            'Doc to review: {}'.format(doc_id), 'Document was approved!'
+        )
+
         self.write({'success': True})
 
 
@@ -458,6 +502,10 @@ class DeleteHandler(BaseHandler):
         self.set_cookie(
             'notification',
             quote('Deleted document: {}'.format(doc.doc_title))
+        )
+
+        self.send_admin_email(
+            'Doc to review: {}'.format(doc_id), 'Document was deleted'
         )
 
         self.write({'success': True})
@@ -699,6 +747,9 @@ if __name__ == '__main__':
             SessionMaker=SessionMaker,
             stored_docs_path=stored_docs_path,
             read_only=settings.get('read_only', False),
+            admin_emails=settings.get('admin_emails', []),
+            from_email=settings.get('from_email', None),
+            app_root=settings.get('app_root', None),
             )),
 
         (r'/search', SearchHandler, dict(
@@ -735,7 +786,10 @@ if __name__ == '__main__':
         (r'/review', ReviewHandler, dict(
             region=settings['region'],
             google_analytics_id=google_analytics_id,
-            SessionMaker=SessionMaker
+            SessionMaker=SessionMaker,
+            admin_emails=settings.get('admin_emails', []),
+            from_email=settings.get('from_email', None),
+            app_root=settings.get('app_root', None),
             )),
 
         (r'/edit/([0-9]+)', EditHandler, dict(
@@ -746,7 +800,10 @@ if __name__ == '__main__':
 
         (r'/delete', DeleteHandler, dict(
             SessionMaker=SessionMaker,
-            stored_docs_path=stored_docs_path
+            stored_docs_path=stored_docs_path,
+            admin_emails=settings.get('admin_emails', []),
+            from_email=settings.get('from_email', None),
+            app_root=settings.get('app_root', None),
             )),
 
         (r'/orgs', OrgHandler, dict(
