@@ -3,14 +3,15 @@
 import base64
 from contextlib import contextmanager
 from datetime import datetime, time
+from email.message import EmailMessage
 import logging
 import mimetypes
 import os
 import shutil
+from smtplib import SMTP
 import sys
 from urllib.parse import quote, unquote, unquote_plus, urlencode
 
-import boto3
 import bleach
 from dateutil import tz
 from feedgen.feed import FeedGenerator
@@ -37,7 +38,8 @@ class BaseHandler(RequestHandler):
     def initialize(
         self, SessionMaker=None, google_analytics_id=None, password=None,
         read_only=None, region=None, stored_docs_path=None, admin_emails=None,
-        from_email=None, app_root=None,
+        from_email=None, app_root=None, smtp_host=None, smtp_port=None,
+        smtp_username=None, smtp_password=None,
     ):
         self._SessionMaker = SessionMaker
         self._google_analytics_id = google_analytics_id
@@ -48,6 +50,10 @@ class BaseHandler(RequestHandler):
         self._admin_emails = admin_emails
         self._from_email = from_email
         self._app_root = app_root
+        self._smtp_host = smtp_host
+        self._smtp_port = smtp_port
+        self._smtp_username = smtp_username
+        self._smtp_password = smtp_password
 
     def get_current_user(self):
         cookie = self.get_secure_cookie('authorized')
@@ -67,16 +73,23 @@ class BaseHandler(RequestHandler):
         return notification
 
     def send_admin_email(self, email_subject, email_text):
-        if self._admin_emails and self._from_email:
-            ses_client = boto3.client('ses')
-            ses_client.send_email(
-                Source=self._from_email,
-                Destination={'ToAddresses': self._admin_emails},
-                Message={
-                    'Subject': {'Data': email_subject},
-                    'Body': {'Text': {'Data': email_text}},
-                },
-            )
+        if self._admin_emails and self._from_email and self._smtp_host:
+            email_msg = EmailMessage()
+            email_msg['From'] = self._from_email
+            email_msg['To'] = self._admin_emails
+            email_msg['Subject'] = email_subject
+            email_msg.set_content(email_text)
+
+            with SMTP(self._smtp_host, self._smtp_port) as smtp:
+                try:
+                    smtp.starttls()
+                except SMTP.SMTPNotSupportedError:
+                    pass
+
+                if self._smtp_username and self._smtp_password:
+                    smtp.login(self._smtp_username, self._smtp_password)
+
+                smtp.send_message(email_msg)
 
     @contextmanager
     def _context_session(self):
@@ -750,6 +763,10 @@ if __name__ == '__main__':
             admin_emails=settings.get('admin_emails', []),
             from_email=settings.get('from_email', None),
             app_root=settings.get('app_root', None),
+            smtp_host=settings.get('smtp_host', None),
+            smtp_port=int(settings.get('smtp_port', 0)),
+            smtp_username=settings.get('smtp_username', None),
+            smtp_password=settings.get('smtp_password', None),
             )),
 
         (r'/search', SearchHandler, dict(
@@ -790,6 +807,10 @@ if __name__ == '__main__':
             admin_emails=settings.get('admin_emails', []),
             from_email=settings.get('from_email', None),
             app_root=settings.get('app_root', None),
+            smtp_host=settings.get('smtp_host', None),
+            smtp_port=int(settings.get('smtp_port', 0)),
+            smtp_username=settings.get('smtp_username', None),
+            smtp_password=settings.get('smtp_password', None),
             )),
 
         (r'/edit/([0-9]+)', EditHandler, dict(
@@ -804,6 +825,10 @@ if __name__ == '__main__':
             admin_emails=settings.get('admin_emails', []),
             from_email=settings.get('from_email', None),
             app_root=settings.get('app_root', None),
+            smtp_host=settings.get('smtp_host', None),
+            smtp_port=int(settings.get('smtp_port', 0)),
+            smtp_username=settings.get('smtp_username', None),
+            smtp_password=settings.get('smtp_password', None),
             )),
 
         (r'/orgs', OrgHandler, dict(

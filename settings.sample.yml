@@ -9,3 +9,7 @@ read_only: false
 admin_emails: ['admin1@example.com', 'admin2@example.com']
 from_email: 'noreply@example.com'
 app_root: 'https://docs.example.com'
+smtp_host: 'smtp.example.com'
+smtp_port: 587
+smtp_username: 'smtp_user@example.com'
+smtp_password: 'smtp_password'
