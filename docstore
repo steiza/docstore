@@ -588,7 +588,12 @@ class AuthHandler(BaseHandler):
                 self.set_cookie(
                     'notification', quote('You have signed in succesfully!')
                 )
-                self.redirect('/')
+
+                next_arg = self.get_argument('next', default=None)
+                if next_arg:
+                    self.redirect(next_arg)
+                else:
+                    self.redirect('/')
 
             else:
                 self.set_header('WWW-Authenticate', 'Basic realm=/auth/')
@@ -851,6 +856,7 @@ if __name__ == '__main__':
 
         cookie_secret=settings['cookie_secret'],
         debug=settings.get('debug', False),
+        login_url='/auth/',
         serve_traceback=False,
         template_path=template_path,
         xsrf_cookies=True
