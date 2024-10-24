@@ -1,0 +1,8 @@
+services:
+  docstore:
+    image: docstore
+    ports:
+      - "8000:8000"
+    volumes:
+      - ${PWD}/storage:/usr/src/app/storage
+      - ${PWD}/settings.yml:/usr/src/app/settings.yml
